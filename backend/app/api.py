@@ -841,3 +841,48 @@ def support(body: schemas.FeedbackIn, db: Session = Depends(get_db), user: model
     db.add(models.Feedback(user_id=user.id, type=body.type, message=body.message))
     db.commit()
     return {"status": "thanks"}
+
+
+# ---------- SOS / emergency ----------
+
+@router.post("/patients/{patient_id}/sos/alert")
+def sos_alert(patient_id: int, payload: dict, user: models.User = Depends(current_user),
+              db: Session = Depends(get_db)):
+    """Patient-triggered SOS: log escalation + notify every linked caregiver/family.
+
+    No auto-dispatch is performed — the client directs the patient to dial
+    112/108 while the care team is alerted. Works even when AI providers are down."""
+    p = _can_access(db, user, patient_id)
+    note = str((payload or {}).get("note") or "").strip()[:200]
+    _event(db, patient_id, "SAFETY_ALERT", f"SOS triggered{(': ' + note) if note else ''}", sev="ESCALATE")
+    _event(db, patient_id, "CAREGIVER_ALERT", "Care team notified of SOS")
+    notified = 0
+    for uid in _linked_user_ids(db, patient_id):
+        _notify(db, uid, f"SOS alert from {p.name}",
+                note or "Patient triggered an emergency alert. Please check in, or advise calling emergency services (112).",
+                kind="SOS_ALERT")
+        _push(uid, {"type": "notification",
+                    "data": {"title": f"SOS alert from {p.name}", "body": note or "Emergency alert triggered."}})
+        notified += 1
+    db.commit()
+    return {"status": "sent", "notified": notified}
+
+
+@router.get("/patients/{patient_id}/emergency-card")
+def emergency_card(patient_id: int, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    """Compact first-responder summary: identity, condition, meds, recent symptoms, contacts."""
+    p = _can_access(db, user, patient_id)
+    meds = db.query(models.Medication).filter(models.Medication.patient_id == patient_id,
+                                              models.Medication.status == "active").all()
+    syms = db.query(models.SymptomLog).filter(models.SymptomLog.patient_id == patient_id)\
+        .order_by(models.SymptomLog.created_at.desc()).limit(3).all()
+    fu = db.query(models.FollowUp).filter(models.FollowUp.patient_id == patient_id,
+                                          models.FollowUp.completed == False).first()  # noqa: E712
+    return {
+        "name": p.name, "age": p.age, "condition": p.condition,
+        "language": p.language, "emergency_contact": p.emergency_contact,
+        "medications": [{"name": m.name, "dose": m.dose, "time": m.time} for m in meds],
+        "recent_symptoms": [json.loads(s.symptoms or '[""]')[0] for s in syms],
+        "next_followup": f"{fu.title} {fu.date_time}".strip() if fu else None,
+        "note": "Sathi emergency card — support info only, not a medical record. Call 112 in an emergency.",
+    }

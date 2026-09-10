@@ -115,6 +115,7 @@ export function Home() {
         <div className="flex gap-2">
           <Btn kind="ghost" onClick={() => report("mild headache")}>headache</Btn>
           <Btn kind="ghost" onClick={() => report("breathing feels worse than yesterday")}>breathing worse</Btn>
+          <Btn kind="danger" onClick={() => go("#/sos")}>🚨 SOS</Btn>
         </div>
       </div>
     </div>

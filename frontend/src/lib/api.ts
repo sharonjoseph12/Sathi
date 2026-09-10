@@ -93,6 +93,8 @@ export const api = {
   note: (pid: number, description: string) => req(`/patients/${pid}/timeline`, J({ description })),
   stats: (pid: number) => cached(pid, "stats", () => req<{ adherence: number; taken_today: number; total: number; streak: number; xp: number; next_followup: string | null; week: { date: string; pct: number }[] }>(`/patients/${pid}/stats`)),
   aiReport: (pid: number) => req<{ report: string }>(`/patients/${pid}/ai-report`),
+  sosAlert: (pid: number, note = "") => req<{ status: string; notified: number }>(`/patients/${pid}/sos/alert`, J({ note })),
+  emergencyCard: (pid: number) => req<{ name: string; age: number; condition: string; language: string; emergency_contact: string; medications: { name: string; dose: string; time: string }[]; recent_symptoms: string[]; next_followup: string | null; note: string }>(`/patients/${pid}/emergency-card`),
   chatHistory: (pid: number, peer: number) => req<{ id: number; senderId: number; text: string; audio: string }[]>(`/chat/messages?patient_id=${pid}&peer_id=${peer}`),
   chatSend: (b: object) => req(`/chat/messages`, J(b)),
   streamUrl: () => `${BASE}/chat/stream?token=${encodeURIComponent(tok.get())}`,

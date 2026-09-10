@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { Login, Register, Onboarding } from "./screens/auth";
 import { Home, Medicines, Symptoms, Schedule, Progress, Followups, Timeline } from "./screens/tabs";
 import { Scan, Chat, DrugChecker, Simplify } from "./screens/tools";
+import { SOS } from "./screens/sos";
 import { Journal, Meditation } from "./screens/well";
 import { CareDash, PatientDetail, CreatePlan, FamilyDash } from "./screens/care";
 import { Settings, Notifications, Help, Demo, Reminders, Plans, Report } from "./screens/more";
@@ -26,7 +27,7 @@ function More() {
     ["#/simplify", "🔤 Simplify jargon"], ["#/journal", "📔 Journal"], ["#/meditate", "🫁 Breathing"],
     ["#/timeline", "🧾 Timeline"], ["#/reminders", "⏰ Reminders"], ["#/plans", "📋 Discharge plans"],
     ["#/report", "🖨 Recovery report"], ["#/notifs", "🔔 Notifications"], ["#/settings", "⚙ Settings"],
-    ["#/help", "❓ Help"], ["#/demo", "▶ Judge demo"],
+    ["#/help", "❓ Help"], ["#/demo", "▶ Judge demo"], ["#/sos", "🚨 Emergency SOS"],
   ];
   return (
     <div className="grid gap-2">
@@ -67,7 +68,7 @@ function Shell() {
     "#/journal": <Journal />, "#/meditate": <Meditation />, "#/care": me.role === "family" ? <FamilyDash /> : <CareDash />,
     "#/family": <FamilyDash />, "#/settings": <Settings />, "#/notifs": <Notifications />,
     "#/reminders": <Reminders />, "#/plans": <Plans />, "#/report": <Report />,
-    "#/help": <Help />, "#/demo": <Demo />, "#/more": <More />,
+    "#/help": <Help />, "#/demo": <Demo />, "#/more": <More />, "#/sos": <SOS />,
   };
   if (path === "#/care" && arg) screens["#/care"] = <PatientDetail id={Number(arg)} />;
   if (path === "#/plan" && arg) screens["#/plan"] = <CreatePlan id={Number(arg)} />;
