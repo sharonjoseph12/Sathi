@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { ocrImage, parseRxText, type OcrMed } from "../lib/ocr";
+import { speakSmart, transcribeBlob } from "../lib/voice";
 import { useApp } from "../lib/store";
 import { Badge, Btn, Card, Empty, Input, Area, Page } from "../components/ui";
-import { listenOnce, speak } from "./tabs";
+import { listenOnce } from "./tabs";
 
 export function Scan() {
   const { pid } = useApp();
@@ -197,9 +198,18 @@ export function Chat() {
     setMsgs((m) => [...m, { from: "me", text: t || "🎤", audio: a || undefined }]);
     if (aiMode && pid) {
       try {
-        const r = await api.aiChat(pid, t || "voice note sent");
+        // Voice note → server transcription (Groq Whisper) so speech works
+        // in browsers without Web Speech recognition.
+        let said = t;
+        if (!said && a) {
+          try {
+            const blob = await (await fetch(a)).blob();
+            said = (await transcribeBlob(blob))?.text || "";
+          } catch { /* fall through */ }
+        }
+        const r = await api.aiChat(pid, said || "voice note sent");
         setMsgs((m) => [...m, { from: "them", text: r.message }]);
-        speak(r.message);
+        void speakSmart(r.message, me?.language ? `${me.language}-IN` : "en-IN");
       } catch { setMsgs((m) => [...m, { from: "them", text: "(offline — will reply when connected)" }]); }
     } else if (pid && peer) {
       try { await api.chatSend({ receiver_id: Number(peer), patient_id: pid, text: t, audio_base64: a || "" }); } catch { /* queued */ }

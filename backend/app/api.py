@@ -733,6 +733,86 @@ Rules:
                 "message": "AI could not parse the image clearly. Please add medicines manually."}
 
 
+# ---------- voice: server STT (Groq Whisper) + TTS (Edge neural, no key) ----------
+
+@router.post("/ai/transcribe")
+def ai_transcribe(payload: dict, user: models.User = Depends(current_user)):
+    """Transcribe a voice note (data-URL audio) via Groq Whisper-large-v3-turbo.
+
+    Lets voice input work in browsers without Web Speech support. Returns
+    {"text", "language"} or {"text": "", "message"} on graceful failure."""
+    import base64 as _b64
+    audio_b64 = ((payload or {}).get("audio") or "").strip()
+    if not audio_b64:
+        return {"text": "", "message": "No audio provided."}
+    if "," in audio_b64:
+        audio_b64 = audio_b64.split(",", 1)[1]
+    if len(audio_b64) > 12_000_000:
+        return {"text": "", "message": "Audio too long — keep voice notes under ~2 minutes."}
+    try:
+        raw = _b64.b64decode(audio_b64)
+    except Exception:
+        return {"text": "", "message": "Could not decode audio. Please try again."}
+    import os as _os
+    if not _os.getenv("GROQ_API_KEY"):
+        return {"text": "", "message": "Voice transcription is not configured on the server."}
+    try:
+        from groq import Groq as _Groq
+        r = _Groq().audio.transcriptions.create(
+            model="whisper-large-v3-turbo",
+            file=("voice.webm", raw),
+            response_format="verbose_json",
+        )
+        text = (getattr(r, "text", "") or "").strip()
+        lang = getattr(r, "language", "") or ""
+        return {"text": text, "language": lang}
+    except Exception as e:
+        print(f"[whisper] transcribe error: {e}")
+        return {"text": "", "message": "Transcription failed — please type instead."}
+
+
+_TTS_VOICES = {
+    "en": "en-IN-NeerjaNeural", "hi": "hi-IN-SwaraNeural", "kn": "kn-IN-SapnaNeural",
+    "ta": "ta-IN-PallaviNeural", "te": "te-IN-ShrutiNeural", "bn": "bn-IN-TanishaaNeural",
+    "mr": "mr-IN-AarohiNeural", "gu": "gu-IN-DhwaniNeural", "ml": "ml-IN-SobhanaNeural",
+    "ur": "ur-PK-AsadNeural", "es": "es-ES-ElviraNeural", "pa": "pa-IN-GaganNeural",
+}
+
+
+@router.post("/ai/speak")
+async def ai_speak(payload: dict, user: models.User = Depends(current_user)):
+    """Neural TTS via Microsoft Edge voices (no API key). Returns mp3 data-URL.
+
+    Client plays this when available and falls back to browser speechSynthesis."""
+    import base64 as _b64
+    import os as _os
+    import tempfile as _tf
+    text = str((payload or {}).get("text") or "").strip()[:500]
+    lang = str((payload or {}).get("lang") or "en").split("-")[0]
+    if not text:
+        return {"audio": "", "message": "No text provided."}
+    try:
+        import edge_tts as _edge
+    except ImportError:
+        return {"audio": "", "message": "Server voice not installed."}
+    voice = _TTS_VOICES.get(lang, _TTS_VOICES["en"])
+    tmp = _tf.NamedTemporaryFile(delete=False, suffix=".mp3")
+    tmp.close()
+    try:
+        await _edge.Communicate(text, voice).save(tmp.name)
+        with open(tmp.name, "rb") as f:
+            audio = _b64.b64encode(f.read()).decode()
+        return {"audio": "data:audio/mpeg;base64," + audio, "voice": voice}
+    except Exception as e:
+        print(f"[edge-tts] speak error: {e}")
+        return {"audio": "", "message": "Server voice failed — using on-device voice."}
+    finally:
+        try:
+            _os.remove(tmp.name)
+        except Exception:
+            pass
+
+
 
 @router.post("/patients/{patient_id}/symptoms/text")
 def report_symptom_text(patient_id: int, symptom_text: str = Query(...), severity: str = Query("unknown"),

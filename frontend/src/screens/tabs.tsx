@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, localSafety, type Event, type Med } from "../lib/api";
 import { t } from "../lib/i18n";
+import { speakSmart } from "../lib/voice";
 import { go, useApp } from "../lib/store";
 import { Badge, Btn, Card, Confetti, Empty, Input, Mascot, Page, Ring, Seg, Toggle } from "../components/ui";
 
@@ -26,12 +27,43 @@ export function speak(text: string) {
   } catch { /* voice optional */ }
 }
 
+// Guided judge walkthrough: PRD acceptance flow as a dismissible checklist.
+function DemoGuide() {
+  const steps: [string, string][] = [
+    ["Mark a medicine Taken below — ring + confetti update", "#/home"],
+    ["Report “breathing feels worse” in Symptoms — safety triage + AI follow-up", "#/symptoms"],
+    ["Ask the AI companion, then send a voice note — Whisper + neural voice", "#/chat"],
+    ["Scan a prescription, or run the drug interaction check", "#/scan"],
+    ["Open Emergency SOS — panic flow, 108/112 dial, CPR coach, QR card", "#/sos"],
+    ["Print the Recovery report with Clinical AI Summary", "#/report"],
+  ];
+  return (
+    <div className="animate-slide-up sticky top-2 z-50 rounded-2xl bg-primary p-3 text-white shadow-lg">
+      <div className="flex items-center justify-between">
+        <p className="font-bold">▶ Judge demo — Meena's recovery in 6 taps</p>
+        <button onClick={() => window.location.hash = "#/home"} className="rounded-full bg-white/20 px-2 text-xs">Close</button>
+      </div>
+      <ol className="mt-2 grid gap-1">
+        {steps.map(([label, path], i) => (
+          <li key={i}>
+            <button onClick={() => go(path)} className="w-full rounded-xl bg-white/10 p-2 text-left text-xs font-semibold active:scale-[0.99]">
+              {i + 1}. {label} →
+            </button>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-1 text-[11px] text-white/80">Then log in as priya@sathi.demo (caregiver) to see the SOS/symptom alerts land.</p>
+    </div>
+  );
+}
+
 export function Home() {
   const { me, pid } = useApp();
   const [meds, setMeds] = useState<Med[]>([]);
   const [st, setSt] = useState({ adherence: 0, taken_today: 0, total: 0, streak: 0, xp: 0, next_followup: null as string | null, week: [] as { date: string; pct: number }[] });
   const [burst, setBurst] = useState(0);
   const [alert, setAlert] = useState<{ text: string; rule: string } | null>(null);
+  const [followup, setFollowup] = useState("");
   const [why, setWhy] = useState(false);
   const [listening, setListening] = useState(false);
   const load = async () => {
@@ -54,7 +86,12 @@ export function Home() {
     try {
       const r = await api.symptom(pid, text);
       if (r.safety_status === "ESCALATE") setAlert({ text: "Safety review flagged this. Please seek medical help.", rule: "server rule ESCALATE" });
-      speak(r.safety_status === "ESCALATE" ? "Please seek medical help." : "Noted. I logged that.");
+      if (r.ai_followup) {
+        setFollowup(r.ai_followup);
+        void speakSmart(r.ai_followup, me?.language ? `${me.language}-IN` : "en-IN");
+      } else {
+        speak(r.safety_status === "ESCALATE" ? "Please seek medical help." : "Noted. I logged that.");
+      }
     } catch { /* offline: local triage already shown */ }
   };
 
@@ -78,15 +115,7 @@ export function Home() {
         </div>
       </header>
 
-      {window.location.hash.includes("demo=1") && (
-        <div className="animate-slide-up sticky top-2 z-50 rounded-2xl bg-primary p-3 text-white shadow-lg">
-          <div className="flex items-center justify-between">
-            <p className="font-bold">▶ Live Demo Mode</p>
-            <button onClick={() => window.location.hash = "#/home"} className="rounded-full bg-white/20 px-2 text-xs">Close</button>
-          </div>
-          <p className="mt-1 text-xs text-white/80">You are logged in as Meena. Try marking a medicine taken to see confetti, or log "headache" in Symptoms to trigger the AI follow-up.</p>
-        </div>
-      )}
+      {window.location.hash.includes("demo=1") && <DemoGuide />}
 
       {alert && (
         <Card accent="#EF4444">
@@ -112,6 +141,14 @@ export function Home() {
         <button onClick={() => listenOnce(report, setListening)}
           className={`grid h-20 w-20 place-items-center rounded-full bg-primary text-3xl text-white shadow-lg active:scale-95 ${listening ? "animate-mic bg-danger" : ""}`}>🎙</button>
         <p className="text-xs text-muted-fg">{listening ? t(me?.language || "en", "listening") : t(me?.language || "en", "talk")}</p>
+        {followup && (
+          <Card accent="#7C3AED">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold">💬 Sathi asks: {followup}</p>
+              <button className="text-xs font-bold text-muted-fg" onClick={() => setFollowup("")}>✕</button>
+            </div>
+          </Card>
+        )}
         <div className="flex gap-2">
           <Btn kind="ghost" onClick={() => report("mild headache")}>headache</Btn>
           <Btn kind="ghost" onClick={() => report("breathing feels worse than yesterday")}>breathing worse</Btn>

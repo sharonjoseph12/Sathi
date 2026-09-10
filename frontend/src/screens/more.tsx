@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { api, tok } from "../lib/api";
+import { LANGS } from "../lib/i18n";
 import { useApp } from "../lib/store";
 import { Badge, Btn, Card, Empty, Input, Area, Page, Toggle } from "../components/ui";
 import { askPermission } from "../lib/notify";
@@ -14,6 +16,45 @@ export function Settings() {
   const [code, setCode] = useState("");
   const [share, setShare] = useState("");
   const [msg, setMsg] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const scanAgain = async (text: string) => {
+    const m = (text || "").toUpperCase().match(/DB-[A-Z0-9]{6}/);
+    if (m) {
+      setCode(m[0]);
+      setMsg(`Scanned ${m[0]} — tap Join.`);
+      return true;
+    }
+    return false;
+  };
+  const scanQr = async () => {
+    const BD = (window as unknown as { BarcodeDetector?: new (o: object) => { detect(v: HTMLVideoElement): Promise<{ rawValue: string }[]> } }).BarcodeDetector;
+    if (!BD) { setMsg("QR scan needs Chrome/Edge on this device — type the code instead."); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      setScanning(true);
+      // Wait a tick for the video element to mount, then attach + detect.
+      setTimeout(async () => {
+        const v = videoRef.current;
+        if (!v) { setScanning(false); return; }
+        v.srcObject = stream;
+        await v.play().catch(() => {});
+        const det = new BD({ formats: ["qr_code"] });
+        for (let i = 0; i < 40; i++) {
+          await new Promise((r) => setTimeout(r, 500));
+          if (!videoRef.current) break;
+          try {
+            const found = await det.detect(v);
+            if (found.length && await scanAgain(found[0].rawValue)) break;
+          } catch { /* keep scanning */ }
+        }
+        stream.getTracks().forEach((t) => t.stop());
+        setScanning(false);
+      }, 100);
+    } catch {
+      setMsg("Camera unavailable — type the code instead.");
+    }
+  };
   const save = async () => {
     try { await api.settings({ language: lang, theme, anchor_times: anchors }); await refresh(); setMsg("Saved"); }
     catch (e) { setMsg(e instanceof Error ? e.message : "failed"); }
@@ -23,7 +64,7 @@ export function Settings() {
       <Page title="Settings" />
       <Card><div className="grid gap-2">
         <label className="text-xs font-bold">Language</label>
-        <div className="flex gap-2">{["en", "hi", "kn", "ta", "es"].map((l) => (
+        <div className="flex flex-wrap gap-2">{LANGS.map((l) => (
           <button key={l} onClick={() => setLang(l)} className={`rounded-full px-3 py-1.5 text-xs font-bold ${lang === l ? "bg-primary text-white" : "bg-secondary text-primary"}`}>{l}</button>))}</div>
         <label className="text-xs font-bold">Anchor times (JSON)</label>
         <Input value={anchors} onChange={(e) => setAnchors(e.target.value)} />
@@ -39,10 +80,17 @@ export function Settings() {
       </div></Card>
       <Card><h3 className="mb-1 font-bold">Link a patient</h3>
         <div className="flex gap-2"><Input placeholder="DB-XXXXXX" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} />
-          <Btn onClick={async () => { try { await api.connect(code); await refresh(); setMsg("Linked!"); } catch (e) { setMsg(e instanceof Error ? e.message : "invalid"); } }}>Join</Btn></div></Card>
+          <Btn onClick={async () => { try { await api.connect(code); await refresh(); setMsg("Linked!"); } catch (e) { setMsg(e instanceof Error ? e.message : "invalid"); } }}>Join</Btn></div>
+        <div className="mt-2"><Btn kind="ghost" onClick={scanQr}>📷 Scan QR instead</Btn></div>
+        {scanning && <video ref={videoRef} className="mt-2 max-h-56 w-full rounded-xl bg-black" muted playsInline />}
+        {msg && <p className="mt-1 text-xs font-semibold">{msg}</p>}</Card>
       {pid > 0 && <Card><h3 className="mb-1 font-bold">Share this patient</h3>
         <Btn kind="ghost" onClick={async () => { try { const c = await api.linkCode(pid); setShare(c.code); } catch { /* owner only */ } }}>Show link code</Btn>
-        {share && <p className="mt-1 font-mono text-lg font-extrabold">{share}</p>}</Card>}
+        {share && <div className="mt-2 flex items-center gap-3">
+          <QRCodeSVG value={share} size={110} />
+          <p className="font-mono text-lg font-extrabold">{share}</p>
+        </div>}
+        {share && <p className="mt-1 text-xs text-muted-fg">Caregivers can scan this QR or type the code in Settings → Link a patient.</p>}</Card>}
       <Btn kind="danger" onClick={logout}>Log out ({me?.email})</Btn>
     </div>
   );
