@@ -466,17 +466,22 @@ def ai_report(patient_id: int, user: models.User = Depends(current_user), db: Se
     _can_access(db, user, patient_id)
     tl = get_timeline(patient_id, user, db)
     meds = db.query(models.Medication).filter(models.Medication.patient_id == patient_id).all()
-    stats = patient_stats(patient_id, user, db)
-    
-    tl_str = "\\n".join(f"- {e['date_time'][:10]}: {e['event_type']} - {e['description']}" for e in tl[:20])
-    meds_str = ", ".join(m.name for m in meds)
+    adherence = stats(patient_id, user, db)
+
+    def _fmt_ts(e: dict) -> str:
+        ts = e.get("created_at", "")
+        s = str(ts)[:10] if ts else "—"
+        return f"- {s}: {e.get('event_type', '')} - {e.get('description', '')}"
+
+    tl_str = "\n".join(_fmt_ts(e) for e in tl[:20]) or "No recent events."
+    meds_str = ", ".join(m.name for m in meds) or "none listed"
     
     prompt = f"""You are a clinical AI assistant. Write a concise, 3-paragraph summary of this patient's recovery over the last week for their doctor to read.
 The paragraphs should be: 1. Overall Progress, 2. Medication Adherence, 3. Notable Concerns.
 Be professional and clinical.
 
 Patient Data:
-Adherence: {stats['adherence']}%
+Adherence: {adherence['adherence']}%
 Active Meds: {meds_str}
 Recent Timeline:
 {tl_str}

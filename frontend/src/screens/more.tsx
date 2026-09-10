@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
-import { go, useApp } from "../lib/store";
+import { api, tok } from "../lib/api";
+import { useApp } from "../lib/store";
 import { Badge, Btn, Card, Empty, Input, Area, Page, Toggle } from "../components/ui";
 import { askPermission } from "../lib/notify";
 
@@ -191,7 +191,8 @@ export function Demo() {
     const run = async () => {
       try {
         setMsg("Logging in as patient Meena...");
-        await api.login("meena@sathi.demo", "demo1234");
+        const r = await api.login({ email: "meena@sathi.demo", password: "demo1234" });
+        tok.set(r.token);
         await refresh();
         setMsg("Routing to home...");
         window.location.hash = "#/home?demo=1";

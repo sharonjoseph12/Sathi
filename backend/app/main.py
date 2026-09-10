@@ -1,5 +1,11 @@
 from dotenv import load_dotenv
-load_dotenv()  # load .env before anything reads env vars
+import os as _os
+# Load backend/.env if present, else fall back to repo-root ../.env so `uvicorn
+# app.main:app` run from backend/ still picks up GEMINI/GROQ keys for demos.
+load_dotenv()
+_root_env = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))), ".env")
+if _os.path.exists(_root_env):
+    load_dotenv(_root_env, override=False)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

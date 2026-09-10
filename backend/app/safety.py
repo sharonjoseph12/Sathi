@@ -83,7 +83,7 @@ def simplify_jargon(text: str) -> dict:
     groq_result = G.chat([
         {"role": "system", "content": _SIMPLIFY_PROMPT},
         {"role": "user", "content": text or ""},
-    ], model="llama-3.3-70b-versatile", temperature=0.2, max_tokens=200)
+    ], temperature=0.2, max_tokens=200)
 
     if groq_result:
         # Still detect which abbreviations were in the original
@@ -183,7 +183,7 @@ def drug_check(names: list[str]) -> dict:
         raw = G.chat([
             {"role": "system", "content": _DRUG_CHECK_PROMPT},
             {"role": "user", "content": f"Medications: {meds_str}"},
-        ], model="llama-3.3-70b-versatile", temperature=0.1, max_tokens=800)
+        ], temperature=0.1, max_tokens=800)
         if raw:
             try:
                 # Extract JSON from response
