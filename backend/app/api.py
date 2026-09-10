@@ -347,13 +347,28 @@ def report_symptom(patient_id: int, body: schemas.SymptomIn, user: models.User =
     safety_status = S.evaluate_safety_symptom(body.text, sev_label)
     _event(db, patient_id, "SYMPTOM_REPORTED", f"Reported: {body.text}",
            sev=safety_status, meta={"severity": body.severity})
+    
+    ai_followup = ""
+    if safety_status != "ESCALATE":
+        from app import groq_client as GC
+        try:
+            res = GC.chat([
+                {"role": "system", "content": "You are a post-hospital care nurse. The patient logged a symptom. Ask a single, short follow-up clarifying question (under 10 words). No pleasantries, just the question."},
+                {"role": "user", "content": f"Patient reported: {body.text}"}
+            ], temperature=0.3, max_tokens=50)
+            if res:
+                ai_followup = res.strip().replace('"', '')
+        except Exception:
+            pass
+
     if safety_status == "ESCALATE":
         _event(db, patient_id, "SAFETY_ALERT", "Safety review triggered", sev="ESCALATE")
         _event(db, patient_id, "CAREGIVER_ALERT", "Caregiver notified of potential concern")
         for uid in _linked_user_ids(db, patient_id):
             _notify(db, uid, "Symptom alert", body.text[:120], kind="SYMPTOM_ALERT")
     db.commit()
-    return {"status": "success", "safety_status": safety_status, "risk": risk}
+    return {"status": "success", "safety_status": safety_status, "risk": risk, "ai_followup": ai_followup}
+
 
 
 @router.get("/patients/{patient_id}/symptoms")
@@ -444,6 +459,38 @@ def stats(patient_id: int, user: models.User = Depends(current_user), db: Sessio
         week.append({"date": day, "pct": round(tk / total * 100) if total else 0})
     return {"adherence": pct, "taken_today": taken_today, "total": len(meds), "streak": streak, "xp": xp,
             "next_followup": f"{fu.title} {fu.date_time}".strip() if fu else None, "week": week}
+
+
+@router.get("/patients/{patient_id}/ai-report")
+def ai_report(patient_id: int, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    _can_access(db, user, patient_id)
+    tl = get_timeline(patient_id, user, db)
+    meds = db.query(models.Medication).filter(models.Medication.patient_id == patient_id).all()
+    stats = patient_stats(patient_id, user, db)
+    
+    tl_str = "\\n".join(f"- {e['date_time'][:10]}: {e['event_type']} - {e['description']}" for e in tl[:20])
+    meds_str = ", ".join(m.name for m in meds)
+    
+    prompt = f"""You are a clinical AI assistant. Write a concise, 3-paragraph summary of this patient's recovery over the last week for their doctor to read.
+The paragraphs should be: 1. Overall Progress, 2. Medication Adherence, 3. Notable Concerns.
+Be professional and clinical.
+
+Patient Data:
+Adherence: {stats['adherence']}%
+Active Meds: {meds_str}
+Recent Timeline:
+{tl_str}
+"""
+    from app import groq_client as GC
+    report = "AI report could not be generated at this time."
+    try:
+        res = GC.chat([{"role": "system", "content": prompt}], temperature=0.2, max_tokens=500)
+        if res:
+            report = res.strip()
+    except Exception:
+        pass
+    
+    return {"report": report}
 
 
 # ---------- chat + SSE ----------
