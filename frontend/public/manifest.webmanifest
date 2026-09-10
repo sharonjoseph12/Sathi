@@ -1,0 +1,9 @@
+{
+  "name": "Sathi — Recovery Companion",
+  "short_name": "Sathi",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#F8F7FF",
+  "theme_color": "#7C3AED",
+  "description": "Voice-first post-hospital recovery companion. Not a doctor."
+}
