@@ -65,17 +65,28 @@ export function Home() {
         <div className="flex items-center justify-between">
           <div><h1 className="text-xl font-extrabold">{t(me?.language || "en", "hello")}, {me?.name?.split(" ")[0] || "friend"}</h1>
             <p className="text-xs text-white/80">{st.taken_today} of {st.total} doses · 🔥 {st.streak}d streak · ✨ {st.xp} XP</p></div>
-          <Mascot mood={alert ? "concerned" : "happy"} />
+          <div className="animate-float">
+            <Mascot mood={alert ? "concerned" : "happy"} />
+          </div>
         </div>
         <div className="mt-3 flex items-center gap-4 rounded-[18px] bg-white/10 p-3">
           <Ring pct={st.adherence} />
           <div className="text-sm">
             <p className="font-bold">Today's recovery</p>
             <p className="text-white/80">{st.next_followup ? `Next: ${st.next_followup}` : "No follow-up scheduled"}</p>
-            <button onClick={() => go("#/demo")} className="mt-1 rounded-full bg-white/20 px-3 py-1 text-xs font-bold">▶ Judge demo</button>
           </div>
         </div>
       </header>
+
+      {window.location.hash.includes("demo=1") && (
+        <div className="animate-slide-up sticky top-2 z-50 rounded-2xl bg-primary p-3 text-white shadow-lg">
+          <div className="flex items-center justify-between">
+            <p className="font-bold">▶ Live Demo Mode</p>
+            <button onClick={() => window.location.hash = "#/home"} className="rounded-full bg-white/20 px-2 text-xs">Close</button>
+          </div>
+          <p className="mt-1 text-xs text-white/80">You are logged in as Meena. Try marking a medicine taken to see confetti, or log "headache" in Symptoms to trigger the AI follow-up.</p>
+        </div>
+      )}
 
       {alert && (
         <Card accent="#EF4444">
@@ -190,17 +201,29 @@ export function Symptoms() {
   const [sev, setSev] = useState(0);
   const [hist, setHist] = useState<{ symptoms: string[]; severity: number; risk: string }[]>([]);
   const [res, setRes] = useState("");
+  const [followup, setFollowup] = useState("");
   const load = () => api.symptoms(pid).then(setHist).catch(() => {});
   useEffect(() => { if (pid) load(); }, [pid]);
-  const submit = async () => {
-    if (!text) return;
+  
+  const submit = async (overrideText?: string) => {
+    const t = overrideText || text;
+    if (!t) return;
     try {
-      const r = await api.symptom(pid, text, sev);
+      const r = await api.symptom(pid, t, sev);
       setRes(r.safety_status === "ESCALATE" ? "⚠ Flagged — please seek medical help." : `Logged (${r.risk}).`);
+      setFollowup(r.ai_followup || "");
       speak(r.safety_status);
-    } catch { setRes(`Logged locally (${localSafety(text)}). Will sync.`); }
-    setText(""); setSev(0); load();
+    } catch { 
+      setRes(`Logged locally (${localSafety(t)}). Will sync.`);
+      setFollowup("");
+    }
+    if (!overrideText) {
+      setText(""); 
+      setSev(0);
+    }
+    load();
   };
+  
   return (
     <div className="grid gap-3">
       <Page title="Symptoms" sub="Plain words work — no medical terms needed" />
@@ -209,7 +232,14 @@ export function Symptoms() {
         <label className="text-xs font-bold">Severity: {sev === 0 ? "—" : `${sev}/10`}</label>
         <input type="range" min={0} max={10} value={sev} onChange={(e) => setSev(Number(e.target.value))} />
         {res && <p className="text-sm font-semibold">{res}</p>}
-        <Btn onClick={submit}>Log symptom</Btn>
+        {followup && (
+          <div className="rounded-xl bg-primary/10 p-3 mt-1">
+            <p className="text-sm font-bold text-primary">✨ Nurse follow-up:</p>
+            <p className="text-sm mb-2">{followup}</p>
+            <Btn kind="ghost" onClick={() => { setText(`${followup} `); setFollowup(""); }}>Answer</Btn>
+          </div>
+        )}
+        <Btn onClick={() => submit()}>Log symptom</Btn>
       </div></Card>
       {hist.map((h, i) => (
         <div key={i} className="flex items-center justify-between rounded-2xl bg-card p-3 shadow-sm">

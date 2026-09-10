@@ -183,30 +183,33 @@ export function Report() {
   );
 }
 
-export function Demo() {  const [log, setLog] = useState<string[]>([]);
-  const [done, setDone] = useState(false);
+export function Demo() {
+  const { refresh } = useApp();
+  const [msg, setMsg] = useState("Initializing demo environment...");
+
   useEffect(() => {
-    const steps = [
-      "① Discharge plan → structured schedule",
-      "② Voice reminder → patient confirms medicine",
-      "③ Symptom reported → AI structures it",
-      "④ Safety rule evaluates → escalation guidance",
-      "⑤ Caregiver notified (consent-based)",
-      "⑥ Timeline updated + explainable alert",
-    ];
-    setLog([]);
-    steps.forEach((s, i) => setTimeout(() => setLog((l) => [...l, s]), 500 * (i + 1)));
-    setTimeout(() => setDone(true), 500 * 7);
-  }, []);
+    const run = async () => {
+      try {
+        setMsg("Logging in as patient Meena...");
+        await api.login("meena@sathi.demo", "demo1234");
+        await refresh();
+        setMsg("Routing to home...");
+        window.location.hash = "#/home?demo=1";
+      } catch (e) {
+        setMsg("Demo login failed. Make sure the backend is running and db is seeded.");
+      }
+    };
+    run();
+  }, [refresh]);
+
   return (
-    <div className="grid gap-3">
-      <Page title="Judge demo" sub="Full loop in ~30 seconds" />
-      <Card>{log.map((l, i) => <p key={i} className="py-1 text-sm font-semibold">✅ {l}</p>)}
-        {done && <div className="mt-2 flex gap-2"><Btn onClick={() => go("#/login")}>Log in & try live</Btn><Btn kind="ghost" onClick={() => go("#/home")}>Open app</Btn></div>}</Card>
-      <Card><p className="text-sm">Demo logins — password <b>demo1234</b>:</p>
-        <p className="font-mono text-xs">meena@sathi.demo (patient)</p>
-        <p className="font-mono text-xs">priya@sathi.demo (caregiver)</p>
-        <p className="font-mono text-xs">arjun@sathi.demo (family)</p></Card>
+    <div className="flex h-[80vh] flex-col items-center justify-center gap-4 text-center">
+      <div className="skeleton h-16 w-16 rounded-full" />
+      <h2 className="text-xl font-extrabold text-primary">Sathi Demo</h2>
+      <p className="text-sm font-semibold animate-pulse">{msg}</p>
+      <div className="mt-8 rounded-xl bg-card p-4 shadow-sm text-xs text-muted-fg max-w-[250px]">
+        This will log you in to the live app as a sample patient and show a guided overlay.
+      </div>
     </div>
   );
 }

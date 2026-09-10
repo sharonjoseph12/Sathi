@@ -255,7 +255,7 @@ export function DrugChecker() {
       <Page title="Drug interaction check" sub="Curated rule base — not a full pharmacology review" />
       {!r ? <Empty text="Loading…" /> : (
         <>
-          {r.hasCritical && <Card accent="#EF4444"><p className="font-bold text-danger">⚠ Critical interaction found — consult your doctor before the next dose.</p></Card>}
+          {r.hasCritical && <div className="animate-danger"><Card accent="#EF4444"><p className="font-bold text-danger">⚠ Critical interaction found — consult your doctor before the next dose.</p></Card></div>}
           {r.interactions.length === 0 && <Card><p className="text-sm">No known pairs from the checked list. {r.note}</p></Card>}
           {r.interactions.map((x, i) => (
             <Card key={i} accent={x.severity === "high" ? "#EF4444" : "#F59E0B"}>
