@@ -142,17 +142,35 @@ export function Report() {
   const [data, setData] = useState<{ adherence: number; streak: number; xp: number; taken_today: number; total: number; next_followup: string | null } | null>(null);
   const [meds, setMeds] = useState<{ name: string; dose: string; time: string }[]>([]);
   const [tl, setTl] = useState<{ description: string; event_type: string; severity?: string | null }[]>([]);
+  const [aiRep, setAiRep] = useState<string | null>(null);
+
   useEffect(() => {
     if (!pid) return;
     api.stats(pid).then(setData).catch(() => {});
     api.meds(pid).then(setMeds).catch(() => {});
     api.timeline(pid).then((t) => setTl(t.slice(0, 25))).catch(() => {});
+    api.aiReport(pid).then((r) => setAiRep(r.report)).catch(() => setAiRep("AI report unavailable."));
   }, [pid]);
+
   return (
     <div className="grid gap-3">
       <Page title="Recovery report" sub="For your next doctor visit" right={<Btn kind="ghost" onClick={() => window.print()}>🖨 Print</Btn>} />
+      
       <Card>
-        <h3 className="text-lg font-extrabold">Sathi Recovery Summary</h3>
+        <h3 className="mb-2 font-bold text-primary">✨ Clinical AI Summary</h3>
+        {!aiRep ? (
+          <div className="grid gap-2">
+            <div className="skeleton h-4 w-full"></div>
+            <div className="skeleton h-4 w-5/6"></div>
+            <div className="skeleton h-4 w-4/6"></div>
+          </div>
+        ) : (
+          <div className="text-sm whitespace-pre-wrap">{aiRep}</div>
+        )}
+      </Card>
+
+      <Card>
+        <h3 className="text-lg font-extrabold">Raw Data</h3>
         <p className="text-sm text-muted-fg">{me?.name} · generated {new Date().toLocaleString()}</p>
         {data && <p className="mt-2 text-sm">Adherence <b>{data.adherence}%</b> · Streak <b>{data.streak}d</b> · XP <b>{data.xp}</b> · Next: <b>{data.next_followup || "—"}</b></p>}
         <h4 className="mt-3 font-bold">Medicines</h4>
