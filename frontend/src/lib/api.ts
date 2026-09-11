@@ -129,4 +129,23 @@ export const api = {
   notifs: () => req<{ id: number; title: string; body: string; kind: string; read: boolean }[]>("/notifications"),
   readNotif: (id: number) => req(`/notifications/${id}/read`, J({})),
   support: (type: string, message: string) => req("/support", J({ type, message })),
+  // ── Health-OS additions (append-only) ──
+  visitSummary: (pid: number) => req<{
+    patient: { id: number; name: string; age: number; condition: string };
+    adherence: number; taken_today: number; total: number; missed: number;
+    symptoms: { text: string; risk: string; at: string }[];
+    followups: { id: number; title: string; date_time: string }[];
+    recent_events: { id: number; event_type: string; description: string; severity?: string | null; at: string }[];
+    generated_at: string;
+  }>(`/patients/${pid}/visit-summary`),
+  whatChanged: (pid: number) => req<{
+    patient_id: number; since_days: number;
+    medicines_added: { id: number; name: string; dose: string; time: string }[];
+    symptoms_delta: { count: number; latest_risk: string | null; trend: string };
+    adherence: number; new_events: number;
+    upcoming_followups: { id: number; title: string; date_time: string }[];
+  }>(`/patients/${pid}/what-changed`),
+  ackAlert: (pid: number, event_id: number) => req<{ status: string }>(`/caregiver/alerts/ack`, J({ patient_id: pid, event_id })),
+  consent: (pid: number) => req<{ care_links: { user_id: number; relationship: string; status: string }[] }>(`/patients/${pid}/consent`),
+  setConsent: (pid: number, b: { user_id: number; status: string }) => req(`/patients/${pid}/consent`, J(b)),
 };

@@ -55,7 +55,8 @@ def check_pw(pw: str, h: str) -> bool:
 
 def token_for(user_id: int, role: str) -> str:
     now = int(time.time())
-    return pyjwt.encode({"sub": user_id, "role": role, "iat": now, "exp": now + TTL}, SECRET, algorithm=ALGO)
+    # NOTE: `sub` must be a string — modern PyJWT rejects int subjects at decode.
+    return pyjwt.encode({"sub": str(user_id), "role": role, "iat": now, "exp": now + TTL}, SECRET, algorithm=ALGO)
 
 
 def get_db():
@@ -77,7 +78,12 @@ def current_user(creds: HTTPAuthorizationCredentials = Depends(_bearer), db: Ses
         data = pyjwt.decode(creds.credentials, SECRET, algorithms=[ALGO])
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid session")
-    user = db.query(models.User).filter(models.User.id == data["sub"]).first()
+    uid = data.get("sub")
+    try:
+        uid = int(uid)  # tokens encode sub as string; DB id is integer
+    except (TypeError, ValueError):
+        pass
+    user = db.query(models.User).filter(models.User.id == uid).first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     return user

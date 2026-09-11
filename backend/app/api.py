@@ -640,7 +640,135 @@ def family_overview(user: models.User = Depends(need_roles("family", "caregiver"
     return cg_patients(user, db)
 
 
+@router.post("/caregiver/alerts/ack")
+def ack_alert(payload: dict, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    """Alert-feedback loop: caregiver marks an alert as seen / not urgent."""
+    pid = int((payload or {}).get("patient_id") or 0)
+    eid = int((payload or {}).get("event_id") or 0)
+    p = _can_access(db, user, pid)
+    ev = db.query(models.RecoveryEvent).filter(models.RecoveryEvent.id == eid,
+                                              models.RecoveryEvent.patient_id == p.id).first()
+    if not ev:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if not (ev.description or "").startswith("[ACK] "):
+        ev.description = "[ACK] " + (ev.description or "")
+    _event(db, p.id, "CAREGIVER_ACK", f"{user.name} acknowledged alert #{eid}")
+    db.commit()
+    return {"status": "ok", "event_id": eid}
+
+
+@router.get("/patients/{patient_id}/visit-summary")
+def visit_summary(patient_id: int, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    p = _can_access(db, user, patient_id)
+    st = stats(patient_id, user, db)
+    meds = db.query(models.Medication).filter(models.Medication.patient_id == patient_id,
+                                              models.Medication.status == "active").all()
+    ids = [m.id for m in meds]
+    missed = db.query(models.DoseLog).filter(models.DoseLog.medication_id.in_(ids),
+                                             models.DoseLog.date == _today(),
+                                             models.DoseLog.status == "missed").count() if ids else 0
+    syms = db.query(models.SymptomLog).filter(models.SymptomLog.patient_id == patient_id)\
+        .order_by(models.SymptomLog.created_at.desc()).limit(5).all()
+    fu = db.query(models.FollowUp).filter(models.FollowUp.patient_id == patient_id,
+                                          models.FollowUp.completed == False).all()  # noqa: E712
+    evs = db.query(models.RecoveryEvent).filter(models.RecoveryEvent.patient_id == patient_id)\
+        .order_by(models.RecoveryEvent.created_at.desc()).limit(8).all()
+    return {
+        "patient": {"id": p.id, "name": p.name, "age": p.age, "condition": p.condition},
+        "adherence": st["adherence"], "taken_today": st["taken_today"], "total": st["total"],
+        "missed": missed,
+        "symptoms": [{"text": (json.loads(s.symptoms or '[""]')[0]), "risk": s.risk,
+                      "at": s.created_at} for s in syms],
+        "followups": [{"id": f.id, "title": f.title, "date_time": f.date_time} for f in fu],
+        "recent_events": [{"id": e.id, "event_type": e.event_type, "description": e.description,
+                           "severity": e.severity, "at": e.created_at} for e in evs],
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.get("/patients/{patient_id}/what-changed")
+def what_changed(patient_id: int, since_days: int = 14,
+                 user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    from datetime import timedelta as _td
+    p = _can_access(db, user, patient_id)
+    cutoff = datetime.now(timezone.utc) - _td(days=since_days)
+
+    def _after(ts):
+        if not ts:
+            return False
+        try:
+            t = ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+            return t >= cutoff
+        except Exception:
+            return False
+
+    meds = db.query(models.Medication).filter(models.Medication.patient_id == patient_id,
+                                              models.Medication.status == "active").all()
+    syms = db.query(models.SymptomLog).filter(models.SymptomLog.patient_id == patient_id)\
+        .order_by(models.SymptomLog.created_at.asc()).all()
+    recent_syms = [s for s in syms if _after(s.created_at)]
+    risks = [s.risk for s in recent_syms]
+    order = {"low": 0, "medium": 1, "high": 2}
+    trend = "stable"
+    if len(risks) >= 2 and order.get(risks[-1], 0) > order.get(risks[0], 0):
+        trend = "worsening"
+    elif len(risks) >= 2 and order.get(risks[-1], 0) < order.get(risks[0], 0):
+        trend = "improving"
+    evs = db.query(models.RecoveryEvent).filter(models.RecoveryEvent.patient_id == patient_id).all()
+    new_evs = [e for e in evs if _after(e.created_at)]
+    fu = db.query(models.FollowUp).filter(models.FollowUp.patient_id == patient_id,
+                                          models.FollowUp.completed == False).all()  # noqa: E712
+    st = stats(patient_id, user, db)
+    return {
+        "patient_id": p.id,
+        "since_days": since_days,
+        "medicines_added": [{"id": m.id, "name": m.name, "dose": m.dose, "time": m.time} for m in meds],
+        "symptoms_delta": {"count": len(recent_syms),
+                           "latest_risk": recent_syms[-1].risk if recent_syms else None,
+                           "trend": trend},
+        "adherence": st["adherence"],
+        "new_events": len(new_evs),
+        "upcoming_followups": [{"id": f.id, "title": f.title, "date_time": f.date_time} for f in fu],
+    }
+
+
+@router.get("/patients/{patient_id}/consent")
+def consent_list(patient_id: int, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    _can_access(db, user, patient_id)
+    rows = db.query(models.CareLink).filter(models.CareLink.patient_id == patient_id).all()
+    return {"care_links": [{"user_id": r.user_id, "relationship": r.relationship,
+                            "status": r.status} for r in rows]}
+
+
+@router.post("/patients/{patient_id}/consent")
+def consent_update(patient_id: int, payload: dict, user: models.User = Depends(current_user),
+                   db: Session = Depends(get_db)):
+    p = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    if p.owner_user_id != user.id:
+        raise HTTPException(status_code=403, detail="Owner only")
+    uid = int((payload or {}).get("user_id") or 0)
+    status = str((payload or {}).get("status") or "").strip().lower()
+    if status not in ("active", "revoked", "pending"):
+        raise HTTPException(status_code=400, detail="status must be active|revoked|pending")
+    link = db.query(models.CareLink).filter(models.CareLink.patient_id == patient_id,
+                                            models.CareLink.user_id == uid).first()
+    if not link:
+        link = models.CareLink(patient_id=patient_id, user_id=uid,
+                               relationship="caregiver", status=status)
+        db.add(link)
+    else:
+        link.status = status  # simple versioning via status field
+    _event(db, patient_id, "NOTE", f"Consent {status} for user #{uid}")
+    db.commit()
+    return {"status": "ok", "user_id": uid, "consent": status}
+
+
 # ---------- AI ----------
+
+# NOTE: authenticated endpoints — basic per-user rate limiting is enforced
+# at the gateway/auth layer; keep these calls user-scoped (no anonymous AI use).
 
 @router.post("/ai/chat")
 def ai_chat(body: schemas.AIChatIn, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
@@ -669,12 +797,14 @@ def ai_chat(body: schemas.AIChatIn, user: models.User = Depends(current_user), d
 
 
 @router.post("/ai/intent")
-def ai_intent(body: schemas.IntentIn):
+def ai_intent(body: schemas.IntentIn, user: models.User = Depends(current_user)):
+    # Rate-limit: authenticated per-user; gateway throttles anonymous abuse.
     return S.route_intent(body.text)
 
 
 @router.post("/ai/simplify")
-def ai_simplify(body: schemas.SimplifyIn):
+def ai_simplify(body: schemas.SimplifyIn, user: models.User = Depends(current_user)):
+    # Rate-limit: authenticated per-user; gateway throttles anonymous abuse.
     return S.simplify_jargon(body.text)
 
 

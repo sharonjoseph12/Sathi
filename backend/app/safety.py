@@ -10,8 +10,38 @@ def evaluate_safety_symptom(symptom_text: str, severity: str = "unknown") -> str
     """Returns NORMAL, MONITOR or ESCALATE."""
     t = (symptom_text or "").lower()
     escalate = ["chest pain", "breathing", "breathless", "severe pain", "bleeding",
-                "unconscious", "fainted", "can't breathe", "cant breathe", "help me", "sos"]
-    monitor = ["headache", "mild pain", "tired", "nausea", "dizzy", "fever", "pain", "cough"]
+                "unconscious", "fainted", "can't breathe", "cant breathe", "help me", "sos",
+                # --- multilingual escalate packs (transliterated + native script) ---
+                # Hindi
+                "saans", "chhati me dard", "khoon", "behosh", "bachao", "madad",
+                "सांस", "छाती में दर्द", "खून", "बेहोश", "बचाओ", "मदद",
+                # Kannada
+                "usirata", "usiratu", "yede novu", "ede novu", "rakta", "sahaya",
+                "ಉಸಿರಾಟ", "ಎದೆ ನೋವು", "ರಕ್ತ", "ಪ್ರಜ್ಞೆ", "ಸಹಾಯ",
+                # Tamil
+                "moochu", "moochhe", "nenju vali", "ratham", "mayakkam", "uthavi",
+                "சுவாச", "மூச்சு", "நெஞ்சு வலி", "இரத்தம்", "உதவி",
+                # Telugu
+                "shwasa", "oopi", "gundello noppi", "raktam", "spriha", "sahayam",
+                "శ్వాస", "ఛాతీ నొప్పి", "రక్తం", "సహాయం"]
+    monitor = ["headache", "mild pain", "tired", "nausea", "dizzy", "fever", "pain", "cough",
+               # Hindi monitor
+               "sir dard", "bukhar", "thakan", "ulti",
+               "सिर दर्द", "बुखार", "थकान", "उल्टी",
+               # Kannada monitor
+               "tale novu", "jwara", "aysha", "vanti",
+               "ತಲೆ ನೋವು", "ಜ್ವರ", "ಆಯಾಸ", "ವಾಂತಿ",
+               # Tamil monitor
+               "thalai vali", "kaichal", "sorvu", "vanthi",
+               "தலைவலி", "காய்ச்சல்", "சோர்வு", "வாந்தி",
+               # Telugu monitor
+               "tala noppi", "jwaram", "alasata", "vanti",
+               "తలనొప్పి", "జ్వరం", "అలసట", "వాంతి"]
+    # Negation handling: explicit denial of a red-flag overrides keyword match,
+    # unless the caller already graded severity as severe.
+    if re.search(r"\bno\s+(chest pain|breathing(\s+problem|\s+difficulty)?|bleeding)\b", t):
+        if severity != "severe":
+            return "NORMAL"
     if severity == "severe":
         return "ESCALATE"
     for p in escalate:
@@ -21,6 +51,31 @@ def evaluate_safety_symptom(symptom_text: str, severity: str = "unknown") -> str
         if p in t:
             return "MONITOR"
     return "NORMAL"
+
+
+def triage_explain(text: str, severity: str = "unknown") -> dict:
+    """Explain a safety triage decision: {level, matched, negated}."""
+    t = (text or "").lower()
+    neg = bool(re.search(r"\bno\s+(chest pain|breathing(\s+problem|\s+difficulty)?|bleeding)\b", t))
+    level = evaluate_safety_symptom(text, severity)
+    matched = None
+    # Find first matching keyword for explainability (escalate first, then monitor).
+    _esc = ["chest pain", "breathing", "breathless", "severe pain", "bleeding",
+            "unconscious", "fainted", "can't breathe", "cant breathe", "help me", "sos",
+            "saans", "chhati me dard", "khoon", "behosh", "bachao", "madad",
+            "सांस", "छाती में दर्द", "खून", "बेहोश", "बचाओ", "मदद",
+            "usirata", "usiratu", "yede novu", "ede novu", "rakta", "sahaya",
+            "ಉಸಿರಾಟ", "ಎದೆ ನೋವು", "ರಕ್ತ", "ಸಹಾಯ",
+            "moochu", "moochhe", "nenju vali", "ratham", "mayakkam", "uthavi",
+            "சுவாச", "மூச்சு", "நெஞ்சு வலி", "இரத்தம்", "உதவி",
+            "shwasa", "oopi", "gundello noppi", "raktam", "sahayam",
+            "శ్వాస", "ఛాతీ నొప్పి", "రక్తం", "సహాయం"]
+    _mon = ["headache", "mild pain", "tired", "nausea", "dizzy", "fever", "pain", "cough"]
+    for p in _esc + _mon:
+        if p in t:
+            matched = p
+            break
+    return {"level": level, "matched": matched, "negated": neg}
 
 
 def risk_from_severity(sev: int | None, text: str) -> str:
