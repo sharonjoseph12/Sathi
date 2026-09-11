@@ -1,16 +1,18 @@
 /**
  * screens/progress.tsx — Dev 3
- * Extracted from tabs.tsx and enhanced with adaptive rendering.
- * Owner: Dev 3
- *
- * Elder mode: No bar chart (confusing for low digital literacy).
- * Plain sentence summary + large adherence ring only.
+ * Extracted from tabs.tsx and enhanced with adaptive rendering and zero emojis.
  */
 import { useEffect, useState } from "react";
 import { api, type Event } from "../lib/api";
 import { useApp } from "../lib/store";
 import { useAdaptiveProfile } from "../lib/useAdaptiveProfile";
 import { Card, Confetti, Empty, Page, Ring } from "../components/ui";
+import {
+  Award,
+  Flame,
+  Sparkles,
+  CheckCircle2,
+} from "lucide-react";
 
 // ─── Elder-mode render ────────────────────────────────────────────────────────
 
@@ -25,7 +27,6 @@ function ElderProgress({
   takenToday: number;
   total: number;
 }) {
-  // Plain English sentence, no jargon
   const sentence =
     total === 0
       ? "No medicines scheduled today."
@@ -45,24 +46,25 @@ function ElderProgress({
   return (
     <div className="grid gap-6">
       <div className="text-center">
-        <h2 className="mb-4 text-2xl font-extrabold tracking-tight">
+        <h2 className="mb-4 text-2xl font-extrabold tracking-tight text-ink">
           Your Progress
         </h2>
-        {/* Large adherence ring, centre-stage */}
+        {/* Large adherence ring */}
         <div className="flex justify-center">
           <Ring pct={adherence} size={160} />
         </div>
-        <p className="mt-5 text-xl font-semibold leading-snug">{sentence}</p>
+        <p className="mt-5 text-xl font-semibold leading-snug text-ink">{sentence}</p>
         {encouragement && (
-          <p className="mt-2 text-base text-muted-fg">{encouragement}</p>
+          <p className="mt-2 text-base text-ink-muted">{encouragement}</p>
         )}
         {streak >= 7 && (
-          <p
+          <div
             aria-label="Seven-day streak trophy"
-            className="mt-4 inline-block rounded-full bg-amber-100 px-4 py-2 text-base font-bold text-amber-800"
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-warning-bg px-4 py-2 text-base font-bold text-warning border border-warning/30"
           >
-            🏆 7-day streak — well done!
-          </p>
+            <Award className="h-5 w-5 text-warning" aria-hidden="true" />
+            <span>7-day streak — well done!</span>
+          </div>
         )}
       </div>
     </div>
@@ -98,26 +100,30 @@ function StandardProgress({
       <Card>
         <div className="flex items-center gap-4">
           <Ring pct={adherence} size={96} />
-          <div className="text-sm">
-            <p>
-              🔥 <b>{streak}</b> active days
+          <div className="text-sm space-y-1 text-ink">
+            <p className="flex items-center gap-1.5 font-medium">
+              <Flame className="h-4 w-4 text-warning" aria-hidden="true" />
+              <span><b>{streak}</b> active days</span>
             </p>
-            <p>
-              ✨ <b>{xp}</b> XP (+10 per dose)
+            <p className="flex items-center gap-1.5 font-medium">
+              <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
+              <span><b>{xp}</b> XP (+10 per dose)</span>
             </p>
-            <p>
-              ✅ {takenToday}/{total} today
+            <p className="flex items-center gap-1.5 font-medium">
+              <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
+              <span>{takenToday}/{total} today</span>
             </p>
             {trophy && (
-              <p className="mt-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
-                🏆 7-day streak trophy!
+              <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-warning-bg px-2.5 py-0.5 text-xs font-bold text-warning border border-warning/30">
+                <Award className="h-3.5 w-3.5 text-warning" aria-hidden="true" />
+                <span>7-day streak trophy!</span>
               </p>
             )}
           </div>
         </div>
         {week.length > 0 && (
           <div
-            className="mt-3 flex items-end gap-1.5"
+            className="mt-4 flex items-end gap-1.5"
             aria-label="7-day adherence chart"
             role="img"
           >
@@ -127,18 +133,18 @@ function StandardProgress({
                 className="flex flex-1 flex-col items-center gap-1"
               >
                 <div
-                  className="w-full rounded-t-lg bg-muted"
+                  className="w-full rounded-t-lg bg-surface-sunken"
                   style={{ height: 64 }}
                 >
                   <div
-                    className="w-full rounded-t-lg bg-gradient-to-t from-[#4B26C8] to-[#8B5CF6]"
+                    className="w-full rounded-t-lg bg-primary"
                     style={{
                       height: `${Math.max(d.pct, 4)}%`,
                       marginTop: `${100 - Math.max(d.pct, 4)}%`,
                     }}
                   />
                 </div>
-                <span className="text-[9px] text-muted-fg">
+                <span className="text-[9px] text-ink-muted">
                   {d.date.slice(5)}
                 </span>
               </div>
@@ -147,13 +153,13 @@ function StandardProgress({
         )}
       </Card>
       <Card>
-        <h3 className="mb-2 font-bold">Recovery timeline</h3>
+        <h3 className="mb-3 font-bold text-ink">Recovery timeline</h3>
         <div className="border-l-2 border-border pl-4">
           {timeline.slice(0, 20).map((e, i) => (
-            <div key={i} className="relative mb-3">
+            <div key={i} className="relative mb-3.5">
               <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-primary" />
-              <p className="text-sm font-semibold">{e.description}</p>
-              <p className="text-xs text-muted-fg">
+              <p className="text-sm font-semibold text-ink">{e.description}</p>
+              <p className="text-xs text-ink-muted">
                 {e.event_type}
                 {e.severity ? ` · ${e.severity}` : ""}
               </p>

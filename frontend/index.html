@@ -10,11 +10,17 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Sathi — Recovery Companion</title>
     <script>
-      try {
-        var t = localStorage.getItem("@sathi_theme");
-        if (t === "dark" || (!t && matchMedia("(prefers-color-scheme: dark)").matches))
-          document.documentElement.classList.add("dark");
-      } catch (e) {}
+      (function() {
+        try {
+          var t = localStorage.getItem("@sathi_theme") || localStorage.getItem("theme");
+          var isDark = t === "dark" || (!t && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (isDark) {
+            document.documentElement.classList.add("dark");
+          } else {
+            document.documentElement.classList.remove("dark");
+          }
+        } catch (e) {}
+      })();
     </script>
   </head>
   <body>

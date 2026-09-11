@@ -29,10 +29,13 @@ export type AdaptiveProfileRaw = {
   accessibilityFlags: AccessibilityFlag[];
 };
 
-// ── Derived profile (what consumers actually read) ───────────────────
+export type Density = "elder" | "standard" | "caregiver";
 
 export type AdaptiveProfile = AdaptiveProfileRaw & {
   role: Role;
+  density: Density;
+  // Self reference so consumers destructuring { profile } get the profile object
+  profile: AdaptiveProfile;
   // Convenience booleans — avoid repeated string comparisons in every component
   isElder: boolean;
   isCaregiver: boolean;
@@ -106,9 +109,12 @@ function derive(raw: AdaptiveProfileRaw, role: Role): AdaptiveProfile {
     typeof window !== "undefined" &&
     window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 
-  return {
+  const density: Density = isElder ? "elder" : isCaregiver ? "caregiver" : "standard";
+
+  const result: any = {
     ...raw,
     role,
+    density,
     isElder,
     isCaregiver,
     isGuardian,
@@ -123,6 +129,8 @@ function derive(raw: AdaptiveProfileRaw, role: Role): AdaptiveProfile {
     isElderMode: isElder,
     isCareMode: isCaregiver || isGuardian,
   };
+  result.profile = result;
+  return result as AdaptiveProfile;
 }
 
 // ── The hook ─────────────────────────────────────────────────────────

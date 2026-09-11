@@ -1,33 +1,54 @@
 /**
  * screens/schedule.tsx — Dev 3
- * Extracted from tabs.tsx and enhanced with adaptive rendering.
- * Owner: Dev 3 (Nav shell, Caregiver & Family, Schedule/Progress/Followups/Timeline)
+ * Extracted from tabs.tsx and enhanced with adaptive rendering and zero emojis.
  */
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { go, useApp } from "../lib/store";
 import { useAdaptiveProfile } from "../lib/useAdaptiveProfile";
 import { Card, Empty, Page } from "../components/ui";
+import {
+  Check,
+  Clock,
+  Calendar,
+  Pill,
+  Sunrise,
+  Sun,
+  Sunset,
+  Moon,
+  ChevronRight,
+  AlertTriangle,
+} from "lucide-react";
 
 // ─── Shared dose card (elder large-touch variant) ────────────────────────────
 
 function DoseCard({ d }: { d: { name: string; time: string; status: string } }) {
   return (
     <div
-      className={`mb-2 flex items-center justify-between rounded-2xl border-2 p-4 ${
+      className={`mb-2 flex items-center justify-between rounded-2xl border-2 p-4 transition ${
         d.status === "taken"
-          ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30"
-          : "border-border bg-card"
+          ? "border-success/40 bg-success-bg"
+          : "border-border bg-surface"
       }`}
     >
       <div>
-        <p className="text-xl font-bold">{d.name}</p>
-        <p className="text-sm text-muted-fg">
-          {d.status === "taken" ? "✅ Taken" : "⏳ Pending"}
+        <p className="text-xl font-bold text-ink">{d.name}</p>
+        <p className="mt-1 flex items-center gap-1.5 text-sm text-ink-muted">
+          {d.status === "taken" ? (
+            <>
+              <Check className="h-4 w-4 text-success" aria-hidden="true" />
+              <span className="font-semibold text-success">Taken</span>
+            </>
+          ) : (
+            <>
+              <Clock className="h-4 w-4" aria-hidden="true" />
+              <span>Pending</span>
+            </>
+          )}
         </p>
       </div>
       {d.status !== "taken" && (
-        <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-bold text-primary">
+        <span className="rounded-full bg-primary-soft px-3 py-1.5 text-sm font-bold text-primary">
           Not yet taken
         </span>
       )}
@@ -46,15 +67,13 @@ function ElderSchedule({
   followups: { title: string; date_time: string }[];
   anchors: Record<string, string>;
 }) {
-  // Plain-language time-of-day labels instead of raw anchor times
   const periods = [
-    { label: "Morning", key: "morning", emoji: "🌅" },
-    { label: "Afternoon", key: "afternoon", emoji: "🌞" },
-    { label: "Evening", key: "evening", emoji: "🌆" },
-    { label: "Night", key: "night", emoji: "🌙" },
+    { label: "Morning", key: "morning", icon: Sunrise },
+    { label: "Afternoon", key: "afternoon", icon: Sun },
+    { label: "Evening", key: "evening", icon: Sunset },
+    { label: "Night", key: "night", icon: Moon },
   ];
 
-  // Format date/time for elder: "Tuesday, 3 PM" not "2026-09-16T15:00"
   function friendlyDate(dt: string) {
     try {
       const d = new Date(dt);
@@ -70,26 +89,27 @@ function ElderSchedule({
     }
   }
 
-  // Determine if anchors are configured at all
   const hasAnchors = Object.values(anchors).some(Boolean);
 
   return (
     <div className="grid gap-4">
       {/* Medicines: grouped by period if anchors set, flat list otherwise */}
       <section aria-label="Today's medicines">
-        <h2 className="mb-3 text-2xl font-extrabold tracking-tight">
+        <h2 className="mb-3 text-2xl font-extrabold tracking-tight text-ink">
           Today's Medicines
         </h2>
 
         {hasAnchors ? (
-          /* Grouped by morning/afternoon/evening/night */
-          periods.map(({ label, key, emoji }) => {
+          periods.map(({ label, key, icon: IconComp }) => {
             const periodDoses = doses.filter((d) => d.time === anchors[key]);
             if (periodDoses.length === 0) return null;
             return (
-              <div key={key} className="mb-3">
-                <p className="mb-2 text-base font-bold text-muted-fg">
-                  {emoji} {label} · {anchors[key]}
+              <div key={key} className="mb-4">
+                <p className="mb-2 flex items-center gap-2 text-base font-bold text-ink-muted">
+                  <IconComp className="h-5 w-5 text-primary" aria-hidden="true" />
+                  <span>
+                    {label} · {anchors[key]}
+                  </span>
                 </p>
                 {periodDoses.map((d, i) => (
                   <DoseCard key={i} d={d} />
@@ -98,7 +118,6 @@ function ElderSchedule({
             );
           })
         ) : (
-          /* Flat list when no anchors configured */
           <div className="grid gap-2">
             {doses.map((d, i) => (
               <DoseCard key={i} d={d} />
@@ -110,28 +129,31 @@ function ElderSchedule({
           <Empty text="No medicines scheduled for today." />
         )}
         <button
-          className="mt-1 min-h-[44px] text-base font-bold text-primary underline"
+          className="mt-2 flex items-center gap-1 min-h-[44px] text-base font-bold text-primary underline"
           onClick={() => go("#/settings")}
           aria-label="Change meal times in settings"
         >
-          Change my meal times →
+          <span>Change my meal times</span>
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </button>
       </section>
 
-      {/* Upcoming appointments in plain language */}
+      {/* Upcoming appointments */}
       {followups.length > 0 && (
         <section aria-label="Upcoming appointments">
-          <h2 className="mb-3 text-2xl font-extrabold tracking-tight">
-            📅 Appointments
+          <h2 className="mb-3 flex items-center gap-2 text-2xl font-extrabold tracking-tight text-ink">
+            <Calendar className="h-6 w-6 text-primary" aria-hidden="true" />
+            <span>Appointments</span>
           </h2>
           {followups.map((f, i) => (
             <div
               key={i}
-              className="mb-2 rounded-2xl border border-border bg-card p-4"
+              className="mb-2 rounded-2xl border-2 border-border bg-surface p-4"
             >
-              <p className="text-xl font-bold">{f.title}</p>
-              <p className="mt-1 text-base text-muted-fg">
-                {friendlyDate(f.date_time)}
+              <p className="text-xl font-bold text-ink">{f.title}</p>
+              <p className="mt-1 flex items-center gap-1.5 text-base text-ink-muted">
+                <Clock className="h-4 w-4" aria-hidden="true" />
+                <span>{friendlyDate(f.date_time)}</span>
               </p>
             </div>
           ))}
@@ -156,43 +178,89 @@ function StandardSchedule({
     <div className="grid gap-3">
       <Page title="Schedule" sub="Anchored to your daily routine" />
       <Card>
-        <p className="text-sm">
-          🌅 Morning {anchors.morning} · 🌞 Afternoon {anchors.afternoon} ·
-          🌆 Evening {anchors.evening} · 🌙 Night {anchors.night}
-        </p>
+        <div className="flex flex-wrap items-center gap-3 text-xs text-ink font-medium">
+          <span className="flex items-center gap-1">
+            <Sunrise className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+            Morning {anchors.morning || "8:00 AM"}
+          </span>
+          <span>·</span>
+          <span className="flex items-center gap-1">
+            <Sun className="h-3.5 w-3.5 text-warning" aria-hidden="true" />
+            Afternoon {anchors.afternoon || "1:00 PM"}
+          </span>
+          <span>·</span>
+          <span className="flex items-center gap-1">
+            <Sunset className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+            Evening {anchors.evening || "7:00 PM"}
+          </span>
+          <span>·</span>
+          <span className="flex items-center gap-1">
+            <Moon className="h-3.5 w-3.5 text-ink-muted" aria-hidden="true" />
+            Night {anchors.night || "10:00 PM"}
+          </span>
+        </div>
         <button
-          className="mt-1 text-xs font-bold text-primary"
+          className="mt-2 flex items-center gap-1 text-xs font-bold text-primary hover:underline min-h-[44px]"
           onClick={() => go("#/settings")}
         >
-          Edit in Settings →
+          <span>Edit in Settings</span>
+          <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
       </Card>
       {doses.map((d, i) => (
         <div
           key={i}
-          className="flex items-center justify-between rounded-2xl bg-card p-3 shadow-sm"
+          className="flex items-center justify-between rounded-2xl border border-border bg-surface p-3 shadow-sm"
         >
-          <p className="text-sm font-semibold">
-            💊 {d.name}{" "}
-            <span className="text-xs text-muted-fg">· {d.time}</span>
-          </p>
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary-soft text-primary">
+              <Pill className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-ink">{d.name}</p>
+              <p className="text-xs text-ink-muted">{d.time}</p>
+            </div>
+          </div>
           <span
-            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+            className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
               d.status === "pending"
-                ? "bg-secondary text-primary"
+                ? "bg-primary-soft text-primary"
                 : d.status === "taken"
-                ? "bg-emerald-100 text-emerald-900"
-                : "bg-amber-100 text-amber-900"
+                ? "bg-success-bg text-success"
+                : "bg-warning-bg text-warning"
             }`}
           >
-            {d.status === "pending" ? "● Pending" : d.status === "taken" ? "✓ Taken" : "⚠ " + d.status}
+            {d.status === "taken" ? (
+              <>
+                <Check className="h-3 w-3 stroke-[3]" aria-hidden="true" />
+                <span>Taken</span>
+              </>
+            ) : d.status === "pending" ? (
+              <>
+                <Clock className="h-3 w-3" aria-hidden="true" />
+                <span>Pending</span>
+              </>
+            ) : (
+              <>
+                <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                <span>{d.status}</span>
+              </>
+            )}
           </span>
         </div>
       ))}
       {followups.map((f, i) => (
-        <div key={i} className="rounded-2xl bg-card p-3 shadow-sm">
-          <p className="text-sm font-semibold">📅 {f.title}</p>
-          <p className="text-xs text-muted-fg">{f.date_time}</p>
+        <div
+          key={i}
+          className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3 shadow-sm"
+        >
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary-soft text-primary">
+            <Calendar className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-ink">{f.title}</p>
+            <p className="text-xs text-ink-muted">{f.date_time}</p>
+          </div>
         </div>
       ))}
       {doses.length === 0 && followups.length === 0 && (
@@ -224,11 +292,7 @@ export function Schedule() {
   }, [pid]);
 
   if (isElderMode) {
-    return (
-      <ElderSchedule doses={doses} followups={fus} anchors={anchors} />
-    );
+    return <ElderSchedule doses={doses} followups={fus} anchors={anchors} />;
   }
-  return (
-    <StandardSchedule doses={doses} followups={fus} anchors={anchors} />
-  );
+  return <StandardSchedule doses={doses} followups={fus} anchors={anchors} />;
 }

@@ -1,15 +1,6 @@
 /**
  * screens/care.tsx — Dev 3
- * Rebuilt caregiver & family screens with alert-fatigue fix.
- *
- * Key changes vs the original:
- * - CareDash: Two-section attention-first layout ("Needs attention now" vs
- *   "All good"). "Why was I alerted?" expand + "Mark as not urgent" feedback
- *   loop (blueprint §8.2 priority #4).
- * - PatientDetail: Flagged-alert section at top if risk is MONITOR/ESCALATE.
- *   Dismiss action that records the review (alert feedback loop).
- * - FamilyDash: Emphasizes the quiet "all good" state. No link-code form.
- * - CreatePlan: Unchanged from original.
+ * Rebuilt caregiver & family screens with alert-fatigue fix and zero emojis.
  */
 import { useEffect, useRef, useState } from "react";
 import { api, type Event } from "../lib/api";
@@ -24,7 +15,16 @@ import {
   Page,
   Ring,
 } from "../components/ui";
-import { Icon } from "../components/icons";
+import {
+  Heart,
+  Check,
+  CheckCircle2,
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  ChevronRight,
+  ArrowLeft,
+} from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -75,16 +75,22 @@ function AttentionCard({
   if (dismissed) return null;
 
   return (
-    <Card accent={p.risk === "ESCALATE" ? "#B42318" : "#D97706"}>
+    <Card
+      className={`border-2 ${
+        p.risk === "ESCALATE"
+          ? "border-danger bg-danger-bg/50"
+          : "border-warning bg-warning-bg/50"
+      }`}
+    >
       <div className="flex items-start gap-3">
         <Ring pct={p.adherence} size={56} />
         <div className="min-w-0 flex-1">
-          <p className="font-bold leading-tight">{p.name}</p>
-          <p className="text-xs text-muted-fg">
+          <p className="font-bold leading-tight text-ink">{p.name}</p>
+          <p className="text-xs text-ink-muted">
             {p.condition} · {p.rel}
           </p>
           {p.recent[0] && (
-            <p className="mt-1 text-xs">Latest: {p.recent[0]}</p>
+            <p className="mt-1 text-xs text-ink font-medium">Latest: {p.recent[0]}</p>
           )}
         </div>
         <Badge level={p.risk} />
@@ -92,10 +98,7 @@ function AttentionCard({
 
       {/* Action row */}
       <div className="mt-3 flex flex-wrap gap-2">
-        <Btn
-          onClick={() => onOpen(p.id)}
-          label={`Open ${p.name}'s detail`}
-        >
+        <Btn onClick={() => onOpen(p.id)} label={`Open ${p.name}'s detail`}>
           View details
         </Btn>
         <Btn
@@ -106,13 +109,24 @@ function AttentionCard({
             setNudgeSent(true);
             setTimeout(() => setNudgeSent(false), 3000);
           }}
+          className="flex items-center gap-1.5"
         >
-          {nudgeSent ? "✓ Sent" : "💜 Nudge"}
+          {nudgeSent ? (
+            <>
+              <Check className="h-4 w-4 text-success" aria-hidden="true" />
+              <span>Sent</span>
+            </>
+          ) : (
+            <>
+              <Heart className="h-4 w-4 text-primary" aria-hidden="true" />
+              <span>Nudge</span>
+            </>
+          )}
         </Btn>
       </div>
 
       {/* Why + dismiss row */}
-      <div className="mt-2 flex flex-wrap gap-2">
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         <button
           aria-expanded={showWhy}
           aria-controls={`why-${p.id}`}
@@ -120,16 +134,21 @@ function AttentionCard({
             setShowWhy((v) => !v);
             setTimeout(() => whyRef.current?.focus(), 50);
           }}
-          className="min-h-[44px] rounded-xl px-4 py-2 text-xs font-bold text-primary underline-offset-2 hover:underline"
+          className="flex items-center gap-1 min-h-[44px] rounded-xl px-3 py-2 text-xs font-bold text-primary underline-offset-2 hover:underline"
         >
-          {showWhy ? "Hide reason ▲" : "Why am I seeing this? ▼"}
+          <span>{showWhy ? "Hide reason" : "Why am I seeing this?"}</span>
+          {showWhy ? (
+            <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+          )}
         </button>
         <button
           onClick={() => {
             onDismiss(p.id);
             setDismissed(true);
           }}
-          className="min-h-[44px] rounded-xl px-4 py-2 text-xs font-bold text-muted-fg hover:text-ink"
+          className="min-h-[44px] rounded-xl px-3 py-2 text-xs font-bold text-ink-muted hover:text-ink"
           aria-label={`Mark ${p.name}'s alert as not urgent`}
         >
           Mark as not urgent
@@ -143,13 +162,12 @@ function AttentionCard({
           tabIndex={-1}
           role="region"
           aria-label={`Reason for alert on ${p.name}`}
-          className="mt-2 rounded-xl bg-muted px-3 py-2 text-xs text-muted-fg outline-none"
+          className="mt-2 rounded-xl bg-surface px-3 py-2 text-xs text-ink-muted border border-border outline-none"
         >
           <span className="font-semibold text-ink">Rule triggered: </span>
           {alertReason(p)}
           <p className="mt-1">
-            No diagnosis made. This alert is generated by a safety rule, not
-            clinical judgement.
+            No diagnosis made. This alert is generated by a safety rule, not clinical judgement.
           </p>
         </div>
       )}
@@ -189,28 +207,20 @@ export function CareDash() {
   };
 
   const dismiss = async (id: number) => {
-    // Record the "not urgent" feedback — nudge with a neutral marker so the
-    // server can tune thresholds. Replace with a dedicated dismissal endpoint
-    // once backend adds one (Phase 4 backend work).
     try {
       await api.nudge(id, "__dismiss_alert__");
     } catch {
-      /* non-blocking — feedback is best-effort */
+      /* non-blocking */
     }
     setDismissed((prev) => new Set([...prev, id]));
   };
 
   const nudge = async (id: number) => {
-    await api.nudge(id, "💜 Thinking of you — keep going!");
+    await api.nudge(id, "Thinking of you — keep going!");
   };
 
-  const attention = list.filter(
-    (p) => needsAttention(p) && !dismissed.has(p.id)
-  );
-  const allGood = list.filter(
-    (p) => !needsAttention(p) || dismissed.has(p.id)
-  );
-
+  const attention = list.filter((p) => needsAttention(p) && !dismissed.has(p.id));
+  const allGood = list.filter((p) => !needsAttention(p) || dismissed.has(p.id));
   const alertCount = attention.length;
 
   return (
@@ -230,17 +240,12 @@ export function CareDash() {
             Link
           </Btn>
         </div>
-        {msg && <p className="mt-1 text-xs">{msg}</p>}
+        {msg && <p className="mt-1 text-xs text-ink-muted">{msg}</p>}
       </Card>
 
       {/* Attention-needed section */}
       <section aria-label="Patients needing attention">
-        {/* Live region: screen reader announces count changes */}
-        <div
-          aria-live="polite"
-          aria-atomic="true"
-          className="mb-3 flex items-center gap-2"
-        >
+        <div aria-live="polite" aria-atomic="true" className="mb-3 flex items-center gap-2">
           {alertCount > 0 ? (
             <>
               <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-danger text-xs font-bold text-white">
@@ -253,23 +258,17 @@ export function CareDash() {
               </h2>
             </>
           ) : (
-            <h2 className="text-base font-bold text-muted-fg">
-              Needs attention now
-            </h2>
+            <h2 className="text-base font-bold text-ink-muted">Needs attention now</h2>
           )}
         </div>
 
         {alertCount === 0 && list.length > 0 && (
-          <div className="rounded-2xl border border-dashed border-emerald-300 bg-emerald-50 p-4 text-center dark:bg-emerald-950/20">
-            <p className="text-2xl" aria-hidden="true">
-              ✅
-            </p>
-            <p className="mt-1 text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+          <div className="rounded-2xl border border-dashed border-success/40 bg-success-bg p-4 text-center">
+            <CheckCircle2 className="h-8 w-8 text-success mx-auto" aria-hidden="true" />
+            <p className="mt-2 text-sm font-semibold text-success">
               All patients are doing well
             </p>
-            <p className="mt-0.5 text-xs text-muted-fg">
-              No alerts at this time
-            </p>
+            <p className="mt-0.5 text-xs text-ink-muted">No alerts at this time</p>
           </div>
         )}
 
@@ -285,32 +284,32 @@ export function CareDash() {
         ))}
       </section>
 
-      {/* All-good section — compact summary, not individual full cards */}
+      {/* All-good section */}
       {allGood.length > 0 && (
         <section aria-label="Patients with no current alerts">
-          <h2 className="mb-2 text-sm font-bold text-muted-fg">
-            ✅ All good ({allGood.length}{" "}
-            {allGood.length === 1 ? "patient" : "patients"})
-          </h2>
+          <div className="mb-2 flex items-center gap-1.5 text-sm font-bold text-ink-muted">
+            <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
+            <h2>
+              All good ({allGood.length} {allGood.length === 1 ? "patient" : "patients"})
+            </h2>
+          </div>
           <Card>
             <div className="grid gap-2">
               {allGood.map((p) => (
                 <button
                   key={p.id}
                   onClick={() => go(`#/care/${p.id}`)}
-                  className="flex min-h-[44px] items-center gap-3 rounded-xl px-2 py-1 text-left hover:bg-muted active:scale-[0.99]"
+                  className="flex min-h-[44px] items-center gap-3 rounded-xl px-2 py-1 text-left hover:bg-surface-sunken active:scale-[0.99] transition"
                   aria-label={`Open ${p.name}'s details — adherence ${p.adherence}%`}
                 >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-success-bg text-xs font-bold text-success">
                     {p.adherence}%
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{p.name}</p>
-                    <p className="truncate text-xs text-muted-fg">
-                      {p.condition}
-                    </p>
+                    <p className="truncate text-sm font-semibold text-ink">{p.name}</p>
+                    <p className="truncate text-xs text-ink-muted">{p.condition}</p>
                   </div>
-                  <Icon name="arrow" size={14} />
+                  <ChevronRight className="h-4 w-4 text-ink-muted" aria-hidden="true" />
                 </button>
               ))}
             </div>
@@ -341,17 +340,17 @@ export function PatientDetail({ id }: { id: number }) {
   const [alertDismissed, setAlertDismissed] = useState(false);
 
   const presets = [
-    "💜 Proud of your recovery today!",
-    "💊 Time for your medicines",
-    "🚶 Time for a short walk",
-    "📅 Don't forget your follow-up",
+    "Proud of your recovery today!",
+    "Time for your medicines",
+    "Time for a short walk",
+    "Don't forget your follow-up",
   ];
 
   const sendNudge = async (text: string) => {
     if (!text) return;
     try {
       await api.nudge(id, text);
-      setNmsg("✓ Sent");
+      setNmsg("Sent");
       setTimeout(() => setNmsg(""), 3000);
     } catch (e) {
       setNmsg(e instanceof Error ? e.message : "failed");
@@ -378,46 +377,54 @@ export function PatientDetail({ id }: { id: number }) {
 
   const topRisk = d.symptoms[0]?.risk ?? "NORMAL";
   const flagged =
-    !alertDismissed &&
-    (topRisk === "ESCALATE" || topRisk === "MONITOR");
+    !alertDismissed && (topRisk === "ESCALATE" || topRisk === "MONITOR");
 
   return (
     <div className="grid gap-3">
       <Page
         title={`Patient #${id}`}
         right={
-          <Btn kind="ghost" onClick={() => go("#/care")}>
-            ← All
+          <Btn
+            kind="ghost"
+            onClick={() => go("#/care")}
+            className="flex items-center gap-1"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            <span>All</span>
           </Btn>
         }
       />
 
       {/* Flagged-alert banner at top of detail */}
       {flagged && (
-        <Card accent={topRisk === "ESCALATE" ? "#B42318" : "#D97706"}>
+        <Card
+          className={`border-2 ${
+            topRisk === "ESCALATE"
+              ? "border-danger bg-danger-bg"
+              : "border-warning bg-warning-bg"
+          }`}
+        >
           <div className="flex items-start gap-3">
-            <Icon name="alert" size={20} />
+            <AlertTriangle className="h-5 w-5 text-danger shrink-0 mt-0.5" aria-hidden="true" />
             <div className="flex-1">
-              <p className="font-bold text-sm">
+              <p className="font-bold text-sm text-ink">
                 {topRisk === "ESCALATE"
                   ? "Safety alert — please check in with this patient"
                   : "Monitoring — keep an eye on this patient"}
               </p>
               {d.symptoms[0] && (
-                <p className="mt-1 text-xs text-muted-fg">
-                  Last symptom: "{d.symptoms[0].symptoms[0]}" ·{" "}
-                  {d.symptoms[0].severity}/10
+                <p className="mt-1 text-xs text-ink-muted">
+                  Last symptom: "{d.symptoms[0].symptoms[0]}" · {d.symptoms[0].severity}/10
                 </p>
               )}
-              <p className="mt-1 text-[11px] text-muted-fg">
-                Rule triggered: {topRisk} state from symptom report. No
-                diagnosis made.
+              <p className="mt-1 text-[11px] text-ink-muted">
+                Rule triggered: {topRisk} state from symptom report. No diagnosis made.
               </p>
             </div>
           </div>
           <button
             onClick={dismissAlert}
-            className="mt-2 min-h-[44px] rounded-xl px-4 py-2 text-xs font-bold text-muted-fg hover:text-ink"
+            className="mt-2 min-h-[44px] rounded-xl px-4 py-2 text-xs font-bold text-ink-muted hover:text-ink"
           >
             Mark as reviewed — not urgent
           </button>
@@ -426,16 +433,15 @@ export function PatientDetail({ id }: { id: number }) {
 
       {/* Today's doses */}
       <Card>
-        <h3 className="mb-1 font-bold">Today's doses</h3>
+        <h3 className="mb-2 font-bold text-ink">Today's doses</h3>
         {d.doses.map((x, i) => (
-          <p key={i} className="text-sm">
-            •{" "}
-            <span className="font-medium">{x.name}</span> —{" "}
+          <p key={i} className="text-sm py-0.5">
+            • <span className="font-medium text-ink">{x.name}</span> —{" "}
             <span
               className={
                 x.status === "taken"
-                  ? "text-emerald-700 dark:text-emerald-400"
-                  : "text-amber-700 dark:text-amber-400"
+                  ? "text-success font-semibold"
+                  : "text-warning font-semibold"
               }
             >
               {x.status}
@@ -443,38 +449,36 @@ export function PatientDetail({ id }: { id: number }) {
           </p>
         ))}
         {d.doses.length === 0 && (
-          <p className="text-sm text-muted-fg">No medicines.</p>
+          <p className="text-sm text-ink-muted">No medicines scheduled.</p>
         )}
       </Card>
 
       {/* Recent symptoms */}
       <Card>
-        <h3 className="mb-1 font-bold">Recent symptoms</h3>
+        <h3 className="mb-2 font-bold text-ink">Recent symptoms</h3>
         {d.symptoms.map((s, i) => (
-          <div key={i} className="mb-1 flex items-center justify-between">
-            <p className="text-sm">
+          <div key={i} className="mb-1 flex items-center justify-between py-0.5">
+            <p className="text-sm text-ink">
               • {s.symptoms[0]}{" "}
-              <span className="text-xs text-muted-fg">
-                ({s.severity}/10)
-              </span>
+              <span className="text-xs text-ink-muted">({s.severity}/10)</span>
             </p>
             <Badge level={s.risk} />
           </div>
         ))}
         {d.symptoms.length === 0 && (
-          <p className="text-sm text-muted-fg">None reported.</p>
+          <p className="text-sm text-ink-muted">None reported.</p>
         )}
       </Card>
 
       {/* Nudge / reminder */}
       <Card>
-        <h3 className="mb-1 font-bold">Send reminder / nudge</h3>
-        <div className="mb-2 flex flex-wrap gap-1.5">
+        <h3 className="mb-2 font-bold text-ink">Send reminder or nudge</h3>
+        <div className="mb-3 flex flex-wrap gap-1.5">
           {presets.map((p) => (
             <button
               key={p}
               onClick={() => sendNudge(p)}
-              className="min-h-[44px] rounded-full bg-secondary px-3 py-1.5 text-xs font-bold text-primary"
+              className="min-h-[44px] rounded-full bg-primary-soft px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 transition"
             >
               {p}
             </button>
@@ -497,11 +501,15 @@ export function PatientDetail({ id }: { id: number }) {
             Send
           </Btn>
         </div>
-        {nmsg && <p className="mt-1 text-xs">{nmsg}</p>}
-        <p className="mt-1 text-[11px] text-muted-fg">
+        {nmsg && (
+          <p className="mt-1 text-xs font-semibold text-success" role="status">
+            {nmsg}
+          </p>
+        )}
+        <p className="mt-2 text-[11px] text-ink-muted">
           Max 3 nudges/hour per patient (anti-spam).
         </p>
-        <div className="mt-2">
+        <div className="mt-3">
           <Btn
             kind="ghost"
             onClick={() => go(`#/plan/${id}`)}
@@ -514,15 +522,15 @@ export function PatientDetail({ id }: { id: number }) {
 
       {/* Timeline */}
       <Card>
-        <h3 className="mb-1 font-bold">Timeline</h3>
+        <h3 className="mb-2 font-bold text-ink">Timeline</h3>
         {d.timeline.slice(0, 10).map((e, i) => (
-          <p key={i} className="text-sm">
+          <p key={i} className="text-sm py-0.5 text-ink">
             • {e.description}{" "}
-            <span className="text-xs text-muted-fg">{e.event_type}</span>
+            <span className="text-xs text-ink-muted">({e.event_type})</span>
           </p>
         ))}
         {d.timeline.length === 0 && (
-          <p className="text-sm text-muted-fg">No events yet.</p>
+          <p className="text-sm text-ink-muted">No events yet.</p>
         )}
       </Card>
     </div>
@@ -537,6 +545,7 @@ export function CreatePlan({ id }: { id: number }) {
     '{"medicines": [{"name": "Amoxicillin 500mg", "dose": "1 capsule", "time": "08:00 AM"}]}'
   );
   const [msg, setMsg] = useState("");
+
   const save = async () => {
     try {
       const r = (await api.addPlan(id, {
@@ -548,13 +557,19 @@ export function CreatePlan({ id }: { id: number }) {
       setMsg(e instanceof Error ? e.message : "failed");
     }
   };
+
   return (
     <div className="grid gap-3">
       <Page
         title="Create discharge plan"
         right={
-          <Btn kind="ghost" onClick={() => go(`#/care/${id}`)}>
-            ← Back
+          <Btn
+            kind="ghost"
+            onClick={() => go(`#/care/${id}`)}
+            className="flex items-center gap-1"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            <span>Back</span>
           </Btn>
         }
       />
@@ -572,7 +587,7 @@ export function CreatePlan({ id }: { id: number }) {
             onChange={(e) => setMedText(e.target.value)}
             aria-label="Discharge plan JSON"
           />
-          {msg && <p className="text-xs font-semibold">{msg}</p>}
+          {msg && <p className="text-xs font-semibold text-success">{msg}</p>}
           <Btn onClick={save} label="Save discharge plan">
             Save plan
           </Btn>
@@ -595,7 +610,7 @@ export function FamilyDash() {
   }, []);
 
   const sendNudge = async (id: number) => {
-    await api.nudge(id, "💜 Proud of your recovery today!");
+    await api.nudge(id, "Proud of your recovery today!");
     setNudgeSent((prev) => ({ ...prev, [id]: true }));
     setTimeout(
       () => setNudgeSent((prev) => ({ ...prev, [id]: false })),
@@ -614,47 +629,47 @@ export function FamilyDash() {
         sub="Read-only — send encouragement anytime"
       />
 
-      {/* Quiet-day state: large positive indicator when all is well */}
+      {/* Quiet-day state */}
       {list.length > 0 && alertCount === 0 && (
-        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-6 text-center dark:from-emerald-950/30 dark:to-transparent dark:border-emerald-800">
-          <p className="text-4xl" aria-hidden="true">
-            ✅
-          </p>
-          <p className="mt-2 text-lg font-bold text-emerald-800 dark:text-emerald-200">
+        <div className="rounded-2xl border border-success/30 bg-success-bg p-6 text-center">
+          <CheckCircle2 className="h-10 w-10 text-success mx-auto" aria-hidden="true" />
+          <p className="mt-2 text-lg font-bold text-success">
             Everyone is doing well
           </p>
-          <p className="mt-1 text-sm text-muted-fg">
+          <p className="mt-1 text-sm text-ink-muted">
             No alerts right now. Send a nudge to encourage them!
           </p>
         </div>
       )}
 
-      {/* Alert indicator when there are concerns (read-only, no actions) */}
+      {/* Alert indicator */}
       {alertCount > 0 && (
         <div
           role="alert"
-          className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:bg-amber-950/20"
+          className="rounded-2xl border border-warning/40 bg-warning-bg p-4"
         >
-          <p className="flex items-center gap-2 text-sm font-bold text-amber-900 dark:text-amber-200">
-            <span aria-hidden="true">⚠</span>
-            {alertCount === 1
-              ? "1 family member may need extra support today"
-              : `${alertCount} family members may need extra support today`}
+          <p className="flex items-center gap-2 text-sm font-bold text-warning">
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+            <span>
+              {alertCount === 1
+                ? "1 family member may need extra support today"
+                : `${alertCount} family members may need extra support today`}
+            </span>
           </p>
-          <p className="mt-1 text-xs text-muted-fg">
+          <p className="mt-1 text-xs text-ink-muted">
             A caregiver has been notified. You can send encouragement below.
           </p>
         </div>
       )}
 
-      {/* Patient cards — compact, read-only, nudge-focused */}
+      {/* Patient cards */}
       {list.map((p) => (
         <Card key={p.id}>
           <div className="flex items-center gap-3">
             <Ring pct={p.adherence} size={64} />
             <div className="min-w-0 flex-1">
-              <p className="font-bold">{p.name}</p>
-              <p className="text-xs text-muted-fg">
+              <p className="font-bold text-ink">{p.name}</p>
+              <p className="text-xs text-ink-muted">
                 {p.recent[0] || "No recent symptoms reported"}
               </p>
             </div>
@@ -662,11 +677,21 @@ export function FamilyDash() {
           </div>
           <Btn
             kind="ghost"
-            className="mt-3 w-full"
+            className="mt-3 w-full flex items-center justify-center gap-1.5"
             label={`Send encouragement to ${p.name}`}
             onClick={() => sendNudge(p.id)}
           >
-            {nudgeSent[p.id] ? "💜 Sent!" : "Send 💜 encouragement"}
+            {nudgeSent[p.id] ? (
+              <>
+                <Check className="h-4 w-4 text-success" aria-hidden="true" />
+                <span>Sent!</span>
+              </>
+            ) : (
+              <>
+                <Heart className="h-4 w-4 text-primary" aria-hidden="true" />
+                <span>Send encouragement</span>
+              </>
+            )}
           </Btn>
         </Card>
       ))}

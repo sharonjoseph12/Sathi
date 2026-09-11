@@ -4,100 +4,113 @@ import { t } from "../lib/i18n";
 import { speakSmart } from "../lib/voice";
 import { go, useApp } from "../lib/store";
 import { Avatar, Badge, Btn, Card, Confetti, Empty, Ring, SectionLabel } from "../components/ui";
-import { Icon } from "../components/icons";
+import {
+  Pill,
+  Check,
+  AlertTriangle,
+  Sparkles,
+  X,
+  ChevronRight,
+  ShieldAlert,
+  Play,
+  Clock,
+  Flame,
+} from "lucide-react";
 import { useAdaptiveProfile, isElder, wantsReducedMotion, wantsVoicePrimary } from "../lib/useAdaptiveProfile";
+import { VoiceInputButton } from "../components/VoiceInputButton";
 
-// ── Voice helpers ────────────────────────────────────────────────────
-/** Web Speech API one-shot listener; typed fallback if unsupported. */
-export function listenOnce(cb: (text: string) => void, setListening: (b: boolean) => void) {
-  const W = window as unknown as { SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any };
-  const Ctor = W.SpeechRecognition || W.webkitSpeechRecognition;
-  if (!Ctor) {
-    const t = prompt("Say / type symptom:", "breathing feels worse than yesterday");
-    if (t) cb(t);
-    return;
-  }
-  const rec = new Ctor();
-  rec.lang = "en-IN";
-  setListening(true);
-  rec.onresult = (e: any) => cb(e.results[0][0].transcript);
-  rec.onend = () => setListening(false);
-  rec.onerror = () => setListening(false);
-  rec.start();
-}
-
-/** Browser TTS one-shot. */
+// ── TTS helper ────────────────────────────────────────────────────────
 export function speak(text: string) {
   try {
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "en-IN";
     speechSynthesis.cancel();
     speechSynthesis.speak(u);
-  } catch { /* voice optional */ }
+  } catch {
+    /* voice optional */
+  }
 }
 
 // ── Demo guide ───────────────────────────────────────────────────────
 function DemoGuide() {
   const steps: [string, string][] = [
-    ["Mark a medicine Taken below — ring + confetti update", "#/home"],
-    ["Report \"breathing feels worse\" in Symptoms — safety triage + AI follow-up", "#/symptoms"],
+    ["Mark a medicine Taken below — ring and confetti update", "#/home"],
+    ["Report breathing feels worse in Symptoms — safety triage + AI follow-up", "#/symptoms"],
     ["Ask the AI companion, then send a voice note — Whisper + neural voice", "#/chat"],
     ["Scan a prescription, or run the drug interaction check", "#/scan"],
     ["Open Emergency SOS — panic flow, 108/112 dial, CPR coach, QR card", "#/sos"],
     ["Print the Recovery report with Clinical AI Summary", "#/report"],
   ];
   return (
-    <div className="animate-slide-up sticky top-2 z-50 rounded-2xl bg-primary p-3 text-white shadow-lg">
+    <aside aria-label="Judge demo walkthrough guide" className="animate-slide-up sticky top-2 z-50 rounded-2xl bg-primary p-4 text-white shadow-lg">
       <div className="flex items-center justify-between">
-        <p className="font-bold">▶ Judge demo — Meena's recovery in 6 taps</p>
-        <button onClick={() => (window.location.hash = "#/home")} className="rounded-full bg-white/20 px-2 text-xs min-h-[44px] min-w-[44px]" aria-label="Close demo guide">
+        <p className="flex items-center gap-2 font-bold text-sm">
+          <Play className="h-4 w-4 fill-white" aria-hidden="true" />
+          Judge demo — Meena's recovery in 6 taps
+        </p>
+        <button
+          onClick={() => (window.location.hash = "#/home")}
+          className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold min-h-[44px] min-w-[44px] hover:bg-white/30 transition-colors"
+          aria-label="Close demo guide"
+        >
           Close
         </button>
       </div>
-      <ol className="mt-2 grid gap-1">
+      <ol className="mt-3 grid gap-1.5">
         {steps.map(([label, path], i) => (
           <li key={i}>
-            <button onClick={() => go(path)} className="w-full rounded-xl bg-white/10 p-2 text-left text-xs font-semibold active:scale-[0.99] min-h-[44px]">
-              {i + 1}. {label} →
+            <button
+              onClick={() => go(path)}
+              className="flex w-full items-center justify-between rounded-xl bg-white/10 p-2.5 text-left text-xs font-semibold hover:bg-white/20 active:scale-[0.99] min-h-[44px] transition"
+            >
+              <span>{i + 1}. {label}</span>
+              <ChevronRight className="h-4 w-4 shrink-0 opacity-80" aria-hidden="true" />
             </button>
           </li>
         ))}
       </ol>
-      <p className="mt-1 text-[11px] text-white/80">Then log in as priya@sathi.demo (caregiver) to see the SOS/symptom alerts land.</p>
-    </div>
+      <p className="mt-2 text-[11px] text-white/80">Then log in as priya@sathi.demo (caregiver) to see the SOS/symptom alerts land.</p>
+    </aside>
   );
 }
 
 // ── Elder medicine card ──────────────────────────────────────────────
 function ElderMedCard({ m, onTake }: { m: Med; onTake: () => void }) {
   return (
-    <div className="mb-3 rounded-2xl border-2 border-border bg-card p-5 shadow-sm">
+    <article className="mb-3 rounded-2xl border-2 border-border bg-surface p-5 shadow-sm">
       <div className="mb-3">
-        <p className="text-xl font-bold leading-tight">{m.name}</p>
-        <p className="mt-1 text-base text-muted-fg">Take at {m.time}</p>
+        <p className="text-xl font-bold leading-tight text-ink">{m.name}</p>
+        <p className="mt-1 flex items-center gap-1.5 text-base text-ink-muted">
+          <Clock className="h-4 w-4" aria-hidden="true" />
+          Take at {m.time}
+        </p>
       </div>
-      <Btn onClick={onTake} className="!w-full !min-h-[60px] !text-xl !font-bold">
-        ✓ Take medicine
+      <Btn onClick={onTake} className="!w-full !min-h-[60px] !text-xl !font-bold flex items-center justify-center gap-2">
+        <Check className="h-6 w-6 stroke-[3]" aria-hidden="true" />
+        Take medicine
       </Btn>
-    </div>
+    </article>
   );
 }
 
-// ── Standard medicine card (current design) ──────────────────────────
+// ── Standard medicine card ───────────────────────────────────────────
 function StandardMedCard({ m, onTake }: { m: Med; onTake: () => void }) {
   return (
-    <div className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3">
+    <article className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-border bg-surface p-3 transition hover:shadow-sm">
       <div className="flex min-w-0 items-center gap-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-secondary text-primary">
-          <Icon name="pill" size={18} />
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+          <Pill className="h-5 w-5" aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">{m.name}</p>
-          <p className="text-xs text-muted-fg">{m.time} · {m.dose}</p>
+          <p className="truncate text-sm font-semibold text-ink">{m.name}</p>
+          <p className="text-xs text-ink-muted">{m.time} · {m.dose}</p>
         </div>
       </div>
-      <Btn onClick={onTake}>Mark taken</Btn>
-    </div>
+      <Btn onClick={onTake} className="flex items-center gap-1.5">
+        <Check className="h-4 w-4" aria-hidden="true" />
+        Mark taken
+      </Btn>
+    </article>
   );
 }
 
@@ -108,14 +121,26 @@ function ElderQuickReport({ onReport }: { onReport: (text: string) => void }) {
     { text: "breathing feels worse than yesterday", label: "Report breathing difficulty" },
   ];
   return (
-    <div className="grid gap-2">
+    <div className="grid gap-2 w-full max-w-md">
       {presets.map((p) => (
-        <Btn key={p.text} kind="ghost" onClick={() => onReport(p.text)} className="!min-h-[56px] !text-base !justify-start">
+        <Btn
+          key={p.text}
+          kind="ghost"
+          onClick={() => onReport(p.text)}
+          className="!min-h-[56px] !text-base !justify-start"
+          aria-label={p.label}
+        >
           {p.text}
         </Btn>
       ))}
-      <Btn kind="danger" onClick={() => go("#/sos")} className="!min-h-[56px] !text-base">
-        🚨 Emergency SOS
+      <Btn
+        kind="danger"
+        onClick={() => go("#/sos")}
+        className="!min-h-[56px] !text-base flex items-center justify-center gap-2"
+        aria-label="Open emergency SOS screen"
+      >
+        <ShieldAlert className="h-5 w-5" aria-hidden="true" />
+        Emergency SOS
       </Btn>
     </div>
   );
@@ -131,7 +156,11 @@ export function Home() {
 
   const [meds, setMeds] = useState<Med[]>([]);
   const [st, setSt] = useState({
-    adherence: 0, taken_today: 0, total: 0, streak: 0, xp: 0,
+    adherence: 0,
+    taken_today: 0,
+    total: 0,
+    streak: 0,
+    xp: 0,
     next_followup: null as string | null,
     week: [] as { date: string; pct: number }[],
   });
@@ -139,22 +168,37 @@ export function Home() {
   const [alert, setAlert] = useState<{ text: string; rule: string } | null>(null);
   const [followup, setFollowup] = useState("");
   const [why, setWhy] = useState(false);
-  const [listening, setListening] = useState(false);
   const [showAllMeds, setShowAllMeds] = useState(false);
 
   const load = async () => {
     if (!pid) return;
-    try { setMeds(await api.meds(pid)); } catch { /* offline */ }
-    try { setSt(await api.stats(pid)); } catch { /* offline */ }
+    try {
+      setMeds(await api.meds(pid));
+    } catch {
+      /* offline */
+    }
+    try {
+      setSt(await api.stats(pid));
+    } catch {
+      /* offline */
+    }
   };
-  useEffect(() => { load(); }, [pid]);
+  useEffect(() => {
+    load();
+  }, [pid]);
 
-  if (!pid) return <Empty text="No patient yet — create a profile or connect with a link code in Settings." />;
+  if (!pid) {
+    return <Empty text="No patient yet — create a profile or connect with a link code in Settings." />;
+  }
 
   const take = async (m: Med) => {
     setMeds((ms) => ms.filter((x) => x.id !== m.id));
     if (!reducedMotion) setBurst((b) => b + 1);
-    try { await api.confirm(pid, m.id); } catch { /* queued offline */ }
+    try {
+      await api.confirm(pid, m.id);
+    } catch {
+      /* queued offline */
+    }
     load();
   };
 
@@ -184,7 +228,9 @@ export function Home() {
       } else {
         speak(r.safety_status === "ESCALATE" ? "Please seek medical help." : "Noted. I logged that.");
       }
-    } catch { /* offline: local triage already shown */ }
+    } catch {
+      /* offline: local triage already shown */
+    }
   };
 
   // Elder mode: show max 3 medicines, progressive disclosure
@@ -196,29 +242,32 @@ export function Home() {
       {!reducedMotion && <Confetti fire={burst} />}
 
       {/* ── Greeting section ── */}
-      <section className="rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgb(16_24_40/0.05)]">
+      <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
         <div className="flex items-center gap-3">
           <Avatar name={me?.name || "Patient"} />
           <div className="min-w-0 flex-1">
-            <p className={`font-bold uppercase tracking-[0.08em] text-muted-fg ${elder ? "text-xs" : "text-[11px]"}`}>
+            <p className={`font-bold uppercase tracking-[0.08em] text-ink-muted ${elder ? "text-xs" : "text-[11px]"}`}>
               Today's recovery
             </p>
-            <h1 className={`truncate font-bold tracking-tight ${elder ? "text-2xl" : "text-lg"}`}>
+            <h1 className={`truncate font-bold tracking-tight text-ink ${elder ? "text-2xl" : "text-lg"}`}>
               {t(me?.language || "en", "hello")}, {me?.name?.split(" ")[0] || "friend"}
             </h1>
           </div>
           {!elder && (
-            <div className="text-right text-xs text-muted-fg">
+            <div className="text-right text-xs text-ink-muted">
               <p className="font-semibold text-ink">{st.taken_today}/{st.total} doses</p>
-              <p>{st.streak}-day streak</p>
+              <p className="flex items-center justify-end gap-1">
+                <Flame className="h-3.5 w-3.5 text-warning" aria-hidden="true" />
+                {st.streak}-day streak
+              </p>
             </div>
           )}
         </div>
 
         {elder ? (
           /* Elder: simple sentence summary */
-          <div className="mt-3 rounded-xl bg-muted/60 p-4">
-            <p className="text-lg font-semibold">
+          <div className="mt-3 rounded-xl bg-surface-sunken p-4">
+            <p className="text-lg font-semibold text-ink">
               {st.total === 0
                 ? "No medicines today."
                 : st.taken_today === st.total
@@ -226,16 +275,19 @@ export function Home() {
                   : `${st.total - st.taken_today} medicine${st.total - st.taken_today > 1 ? "s" : ""} left today.`}
             </p>
             {st.next_followup && (
-              <p className="mt-1 text-base text-muted-fg">Next appointment: {st.next_followup}</p>
+              <p className="mt-1 flex items-center gap-1.5 text-base text-ink-muted">
+                <Clock className="h-4 w-4" aria-hidden="true" />
+                Next appointment: {st.next_followup}
+              </p>
             )}
           </div>
         ) : (
           /* Standard: ring + stats */
-          <div className="mt-3 flex items-center gap-4 rounded-xl bg-muted/60 p-3">
+          <div className="mt-3 flex items-center gap-4 rounded-xl bg-surface-sunken p-3">
             <Ring pct={st.adherence} />
             <div className="text-sm">
-              <p className="font-semibold">Adherence {st.adherence}%</p>
-              <p className="text-[13px] text-muted-fg">
+              <p className="font-semibold text-ink">Adherence {st.adherence}%</p>
+              <p className="text-[13px] text-ink-muted">
                 {st.next_followup ? `Next follow-up: ${st.next_followup}` : "No follow-up scheduled"}
               </p>
             </div>
@@ -245,27 +297,41 @@ export function Home() {
 
       {window.location.hash.includes("demo=1") && <DemoGuide />}
 
-      {/* ── Safety alert ── */}
+      {/* ── Safety alert (role=alert + aria-live) ── */}
       {alert && (
-        <Card accent="#B42318">
+        <Card
+          className="border-2 border-danger bg-danger-bg"
+          role="alert"
+          aria-live="assertive"
+        >
           <div className="flex items-center justify-between gap-2">
-            <p className={`flex items-center gap-2 font-semibold text-danger ${elder ? "text-lg" : "text-sm"}`}>
-              <Icon name="alert" size={elder ? 24 : 18} />
+            <p className={`flex items-center gap-2 font-bold text-danger ${elder ? "text-lg" : "text-sm"}`}>
+              <AlertTriangle className={elder ? "h-6 w-6" : "h-5 w-5"} aria-hidden="true" />
               {elder ? "You may need a doctor" : "Please seek medical attention"}
             </p>
             <Badge level="ESCALATE" />
           </div>
-          <p className={`mt-2 ${elder ? "text-lg leading-relaxed" : "text-sm"}`}>{alert.text}</p>
+          <p className={`mt-2 font-medium text-ink ${elder ? "text-lg leading-relaxed" : "text-sm"}`}>
+            {alert.text}
+          </p>
           <div className={`mt-3 flex gap-2 ${elder ? "flex-col" : ""}`}>
-            <Btn kind="danger" onClick={() => setAlert(null)} className={elder ? "!min-h-[56px] !text-lg" : ""}>
+            <Btn
+              kind="danger"
+              onClick={() => setAlert(null)}
+              className={elder ? "!min-h-[56px] !text-lg" : ""}
+            >
               I've received help
             </Btn>
             {!elder && (
-              <Btn kind="ghost" onClick={() => setWhy((w) => !w)}>Why?</Btn>
+              <Btn kind="ghost" onClick={() => setWhy((w) => !w)}>
+                Why?
+              </Btn>
             )}
           </div>
           {why && !elder && (
-            <p className="mt-2 rounded-xl bg-muted p-2 text-xs text-muted-fg">Rule: {alert.rule}. No diagnosis made.</p>
+            <p className="mt-2 rounded-xl bg-surface p-2 text-xs text-ink-muted border border-border">
+              Rule: {alert.rule}. No diagnosis made.
+            </p>
           )}
         </Card>
       )}
@@ -279,72 +345,99 @@ export function Home() {
             text={elder ? "No medicines left for this time." : "No remaining medicines for this time window."}
           />
         ) : (
-          <>
+          <div role="list" aria-label="Today's medicine list">
             {visibleMeds.map((m) =>
-              elder
-                ? <ElderMedCard key={m.id} m={m} onTake={() => take(m)} />
-                : <StandardMedCard key={m.id} m={m} onTake={() => take(m)} />
+              elder ? (
+                <ElderMedCard key={m.id} m={m} onTake={() => take(m)} />
+              ) : (
+                <StandardMedCard key={m.id} m={m} onTake={() => take(m)} />
+              )
             )}
             {hasMoreMeds && (
-              <Btn kind="ghost" onClick={() => setShowAllMeds(true)} className="!min-h-[56px] !text-base !w-full">
+              <Btn
+                kind="ghost"
+                onClick={() => setShowAllMeds(true)}
+                className="!min-h-[56px] !text-base !w-full"
+              >
                 Show {meds.length - 3} more medicine{meds.length - 3 > 1 ? "s" : ""}
               </Btn>
             )}
-          </>
+          </div>
         )}
         <button
-          className={`mt-1 inline-flex min-h-[44px] items-center gap-1 font-semibold text-primary ${elder ? "text-base" : "text-[13px]"}`}
+          className={`mt-2 inline-flex min-h-[44px] items-center gap-1 font-semibold text-primary hover:underline ${
+            elder ? "text-base" : "text-[13px]"
+          }`}
           onClick={() => go("#/meds")}
           aria-label="Manage all medicines"
         >
-          Manage medicines <Icon name="arrow" size={14} />
+          <span>Manage medicines</span>
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </button>
       </Card>
 
       {/* ── Voice / symptom reporting ── */}
-      <div className="grid place-items-center gap-3 py-2 text-center">
-        <button
-          aria-label={listening ? "Listening — tap to stop" : "Report a symptom by voice"}
-          onClick={() => listenOnce(report, setListening)}
-          className={`grid place-items-center rounded-full text-white shadow-md transition active:scale-95 ${
-            listening ? "bg-danger" : "bg-primary hover:brightness-105"
-          } ${elder || voicePrimary ? "h-20 w-20" : "h-16 w-16"}`}
-        >
-          <Icon name="mic" size={elder || voicePrimary ? 32 : 26} />
-        </button>
-        <p className={`text-muted-fg ${elder ? "text-base" : "text-xs"}`}>
-          {listening
-            ? t(me?.language || "en", "listening")
-            : elder
-              ? "Tap to tell me how you feel"
-              : t(me?.language || "en", "talk")}
+      <section aria-label="Symptom reporting" className="grid place-items-center gap-3 py-2 text-center">
+        <VoiceInputButton
+          onTranscript={(text) => report(text)}
+          elderVariant={elder || voicePrimary}
+          className="mx-auto"
+        />
+
+        <p className={`text-ink-muted ${elder ? "text-base" : "text-xs"}`}>
+          {elder
+            ? "Tap to tell me how you feel"
+            : t(me?.language || "en", "talk")}
         </p>
 
+        {/* AI follow-up live region */}
         {followup && (
-          <Card accent="#4F46E5">
-            <div className="flex items-center justify-between gap-2">
-              <p className={`font-medium ${elder ? "text-lg" : "text-sm"}`}>Sathi asks: {followup}</p>
-              <button
-                aria-label="Dismiss follow-up question"
-                className="min-h-[44px] min-w-[44px] text-xs font-bold text-muted-fg"
-                onClick={() => setFollowup("")}
-              >
-                ✕
-              </button>
-            </div>
-          </Card>
+          <div
+            role="status"
+            aria-live="polite"
+            className="w-full text-left"
+          >
+            <Card className="border border-primary/30 bg-primary-soft">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-2">
+                  <Sparkles className="h-5 w-5 text-primary shrink-0 mt-0.5" aria-hidden="true" />
+                  <p className={`font-medium text-ink ${elder ? "text-lg" : "text-sm"}`}>
+                    Sathi asks: {followup}
+                  </p>
+                </div>
+                <button
+                  aria-label="Dismiss follow-up question"
+                  className="min-h-[44px] min-w-[44px] grid place-items-center rounded-lg text-ink-muted hover:text-ink"
+                  onClick={() => setFollowup("")}
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            </Card>
+          </div>
         )}
 
         {elder ? (
           <ElderQuickReport onReport={report} />
         ) : (
-          <div className="flex gap-2">
-            <Btn kind="ghost" onClick={() => report("mild headache")}>headache</Btn>
-            <Btn kind="ghost" onClick={() => report("breathing feels worse than yesterday")}>breathing worse</Btn>
-            <Btn kind="danger" onClick={() => go("#/sos")}>🚨 SOS</Btn>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Btn kind="ghost" onClick={() => report("mild headache")}>
+              headache
+            </Btn>
+            <Btn kind="ghost" onClick={() => report("breathing feels worse than yesterday")}>
+              breathing worse
+            </Btn>
+            <Btn
+              kind="danger"
+              onClick={() => go("#/sos")}
+              className="flex items-center gap-1.5"
+            >
+              <ShieldAlert className="h-4 w-4" aria-hidden="true" />
+              SOS
+            </Btn>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

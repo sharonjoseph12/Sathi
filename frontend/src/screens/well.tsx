@@ -2,11 +2,18 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { Btn, Card, Empty, Area, Page } from "../components/ui";
 import { useAdaptiveProfile, getVariant, prefersReducedMotion } from "../lib/useAdaptiveProfile";
+import {
+  Frown,
+  Meh,
+  Smile,
+  SmilePlus,
+  Sparkles,
+  Wind,
+  Check,
+} from "lucide-react";
 
 /* ══════════════════════════════════════════════════════════════════
    Journal — Mood, energy & recovery notes
-   Elder: simplified 3-choice mood (Good/Okay/Not great), larger buttons
-   Standard: 5-point emoji scale + energy slider
    ══════════════════════════════════════════════════════════════════ */
 export function Journal() {
   const profile = useAdaptiveProfile();
@@ -17,16 +24,23 @@ export function Journal() {
   const [energy, setEnergy] = useState(3);
   const [text, setText] = useState("");
   const load = () => api.journal().then(setList).catch(() => {});
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
-  const faces = ["😞", "🙁", "😐", "🙂", "😄"];
-  const faceLabels = ["Very sad", "Sad", "Okay", "Good", "Very happy"];
+  const moodLevels = [
+    { icon: Frown, label: "Very sad", value: 1 },
+    { icon: Meh, label: "Low", value: 2 },
+    { icon: Smile, label: "Okay", value: 3 },
+    { icon: SmilePlus, label: "Good", value: 4 },
+    { icon: Sparkles, label: "Great", value: 5 },
+  ];
 
   // Elder mode: 3 simplified choices mapped to 5-point scale
-  const elderChoices: { label: string; emoji: string; value: number }[] = [
-    { label: "Not great", emoji: "😞", value: 2 },
-    { label: "Okay", emoji: "😐", value: 3 },
-    { label: "Good", emoji: "😄", value: 5 },
+  const elderChoices = [
+    { label: "Not great", icon: Frown, value: 2 },
+    { label: "Okay", icon: Smile, value: 3 },
+    { label: "Good", icon: Sparkles, value: 5 },
   ];
 
   const save = async () => {
@@ -35,65 +49,78 @@ export function Journal() {
     load();
   };
 
+  const getMoodIcon = (val: number) => {
+    const item = moodLevels.find((m) => m.value === val) || moodLevels[2];
+    const IconComp = item.icon;
+    return <IconComp className="h-5 w-5 text-primary shrink-0" aria-hidden="true" />;
+  };
+
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-4">
       <Page
         title="Journal"
         sub={elderMode ? "How are you feeling today?" : "Mood · energy · notes"}
       />
       <Card>
-        <div className="grid gap-3">
+        <div className="grid gap-4">
           {/* Mood selection */}
           <fieldset>
-            <legend className={`font-bold ${elderMode ? "text-base" : "text-xs"}`}>
+            <legend className={`font-bold text-ink ${elderMode ? "text-base" : "text-xs"}`}>
               {elderMode ? "How do you feel?" : "Mood"}
             </legend>
             {elderMode ? (
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                {elderChoices.map((c) => (
-                  <button
-                    key={c.value}
-                    onClick={() => setMood(c.value)}
-                    aria-label={`Mood: ${c.label}`}
-                    aria-pressed={mood === c.value}
-                    className={`grid place-items-center gap-1 rounded-2xl p-3 text-center transition-all ${
-                      mood === c.value ? "bg-primary text-white ring-2 ring-primary ring-offset-2" : "bg-secondary"
-                    }`}
-                    style={{ minHeight: 72 }}
-                  >
-                    <span className="text-3xl" aria-hidden="true">{c.emoji}</span>
-                    <span className={`text-sm font-bold ${mood === c.value ? "text-white" : "text-primary"}`}>
-                      {c.label}
-                    </span>
-                  </button>
-                ))}
+              <div className="mt-2.5 grid grid-cols-3 gap-2">
+                {elderChoices.map((c) => {
+                  const IconComp = c.icon;
+                  return (
+                    <button
+                      key={c.value}
+                      onClick={() => setMood(c.value)}
+                      aria-label={`Mood: ${c.label}`}
+                      aria-pressed={mood === c.value}
+                      className={`grid place-items-center gap-2 rounded-2xl p-3 text-center transition-all min-h-[72px] ${
+                        mood === c.value
+                          ? "bg-primary text-white shadow-sm ring-2 ring-primary ring-offset-2"
+                          : "bg-surface-sunken text-ink hover:bg-muted"
+                      }`}
+                    >
+                      <IconComp className="h-7 w-7" aria-hidden="true" />
+                      <span className="text-sm font-bold">{c.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             ) : (
-              <div className="mt-1 flex gap-2" role="radiogroup" aria-label="Select your mood">
-                {faces.map((f, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setMood(i + 1)}
-                    role="radio"
-                    aria-checked={mood === i + 1}
-                    aria-label={`Mood: ${faceLabels[i]}`}
-                    className={`rounded-2xl p-2 text-2xl transition-all ${
-                      mood === i + 1 ? "bg-secondary ring-2 ring-primary" : ""
-                    }`}
-                    style={{ minHeight: 44, minWidth: 44 }}
-                  >
-                    {f}
-                  </button>
-                ))}
+              <div className="mt-2 flex gap-2" role="radiogroup" aria-label="Select your mood">
+                {moodLevels.map((item) => {
+                  const IconComp = item.icon;
+                  return (
+                    <button
+                      key={item.value}
+                      onClick={() => setMood(item.value)}
+                      role="radio"
+                      aria-checked={mood === item.value}
+                      aria-label={`Mood: ${item.label}`}
+                      className={`flex-1 grid place-items-center rounded-2xl p-2.5 transition min-h-[44px] ${
+                        mood === item.value
+                          ? "bg-primary text-white shadow-sm"
+                          : "bg-surface-sunken text-ink hover:bg-muted"
+                      }`}
+                    >
+                      <IconComp className="h-6 w-6" aria-hidden="true" />
+                    </button>
+                  );
+                })}
               </div>
             )}
           </fieldset>
 
-          {/* Energy — hidden in elder mode for simplicity */}
+          {/* Energy */}
           {!elderMode && (
             <fieldset>
-              <legend className="text-xs font-bold">
-                Energy: {energy}/5
+              <legend className="text-xs font-bold text-ink flex items-center justify-between">
+                <span>Energy level</span>
+                <span className="font-mono">{energy}/5</span>
               </legend>
               <input
                 type="range"
@@ -102,13 +129,12 @@ export function Journal() {
                 value={energy}
                 onChange={(e) => setEnergy(Number(e.target.value))}
                 aria-label={`Energy level: ${energy} out of 5`}
-                aria-valuemin={1}
-                aria-valuemax={5}
-                aria-valuenow={energy}
-                className="mt-1 w-full"
+                className="mt-2 w-full accent-primary h-2 bg-surface-sunken rounded-lg cursor-pointer"
               />
-              <div className="flex justify-between text-[10px] text-muted-fg">
-                <span>Low</span><span>Medium</span><span>High</span>
+              <div className="flex justify-between text-[10px] text-ink-muted mt-1">
+                <span>Low</span>
+                <span>Medium</span>
+                <span>High</span>
               </div>
             </fieldset>
           )}
@@ -121,40 +147,59 @@ export function Journal() {
             onChange={(e) => setText(e.target.value)}
             aria-label="Journal notes for today"
           />
-          <Btn onClick={save} label="Save journal entry">
-            {elderMode ? "💾 Save" : "Save entry"}
+          <Btn
+            onClick={save}
+            label="Save journal entry"
+            className={`flex items-center justify-center gap-2 ${elderMode ? "!min-h-[56px] !text-lg" : ""}`}
+          >
+            <Check className="h-4 w-4" aria-hidden="true" />
+            <span>{elderMode ? "Save entry" : "Save"}</span>
           </Btn>
         </div>
       </Card>
 
       {/* Previous entries */}
       {list.length > 0 && (
-        <div>
-          <p className={`mb-2 font-bold text-muted-fg ${elderMode ? "text-sm" : "text-xs"}`}>
+        <section aria-label="Previous journal entries">
+          <h2 className={`mb-2 font-bold text-ink-muted ${elderMode ? "text-sm" : "text-xs"}`}>
             Previous entries
-          </p>
-          {list.map((j, i) => (
-            <div key={i} className="mb-2 rounded-2xl bg-card p-3 shadow-sm">
-              <p className={elderMode ? "text-base" : "text-sm"}>
-                {faces[j.mood - 1]}{" "}
-                {j.text || <span className="text-muted-fg">(no note)</span>}
-              </p>
-              {!elderMode && (
-                <p className="text-xs text-muted-fg">energy {j.energy}/5</p>
-              )}
-            </div>
-          ))}
-        </div>
+          </h2>
+          <div role="list" className="grid gap-2">
+            {list.map((j, i) => (
+              <div
+                key={i}
+                className="flex items-start gap-3 rounded-2xl border border-border bg-surface p-3 shadow-sm"
+              >
+                <div className="mt-0.5">{getMoodIcon(j.mood)}</div>
+                <div className="min-w-0 flex-1">
+                  <p className={`text-ink ${elderMode ? "text-base" : "text-sm"}`}>
+                    {j.text || <span className="text-ink-muted italic">No note added</span>}
+                  </p>
+                  {!elderMode && (
+                    <p className="text-xs text-ink-muted mt-0.5">Energy: {j.energy}/5</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
-      {list.length === 0 && <Empty text={elderMode ? "No entries yet. Start by telling us how you feel!" : "No entries yet."} />}
+
+      {list.length === 0 && (
+        <Empty
+          text={
+            elderMode
+              ? "No entries yet. Start by telling us how you feel!"
+              : "No journal entries yet."
+          }
+        />
+      )}
     </div>
   );
 }
 
 /* ══════════════════════════════════════════════════════════════════
    Meditation — 4-4-4 breathing exercise
-   Respects prefers-reduced-motion (text-only phase indicator)
-   Elder: larger circle, clearer text, auto-stop prompt at 5min
    ══════════════════════════════════════════════════════════════════ */
 export function Meditation() {
   const profile = useAdaptiveProfile();
@@ -196,67 +241,87 @@ export function Meditation() {
   };
 
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-4">
       <Page
         title={elderMode ? "Breathing Exercise" : "Breathing"}
-        sub={elderMode ? "A calm breathing exercise to help you relax" : "4-4-4 calm rhythm"}
+        sub={
+          elderMode
+            ? "A calm breathing exercise to help you relax"
+            : "4-4-4 calm rhythm"
+        }
       />
       <Card>
-        <div className="grid place-items-center gap-3 py-6 text-center">
-          {/* Breathing circle — respects reduced motion */}
+        <div className="grid place-items-center gap-4 py-8 text-center">
+          {/* Breathing circle */}
           <div
-            className={`grid place-items-center rounded-full bg-secondary text-4xl ${circleSize} ${
-              on && !reducedMotion ? "scale-110 transition-transform duration-[4s]" : "transition-transform"
+            className={`grid place-items-center rounded-full bg-primary-soft text-primary ${circleSize} ${
+              on && !reducedMotion
+                ? "scale-110 transition-transform duration-[4s]"
+                : "transition-transform"
             }`}
             aria-hidden="true"
           >
-            🫁
+            <Wind className={elderMode ? "h-14 w-14" : "h-10 w-10"} />
           </div>
 
           {/* Phase indicator */}
           <p
-            className={`font-bold ${elderMode ? "text-xl" : "text-lg"}`}
+            className={`font-bold text-ink ${elderMode ? "text-2xl" : "text-xl"}`}
             aria-live="polite"
             aria-atomic="true"
             role="status"
           >
-            {on ? phase : elderMode ? "Ready when you are" : "Ready when you are"}
+            {on ? phase : "Ready when you are"}
           </p>
 
           {/* Reduced-motion text indicator */}
           {on && reducedMotion && (
             <p className="text-sm font-semibold text-primary" aria-live="polite">
-              {phase === "Breathe in…" ? "↑ IN" : phase === "Hold…" ? "— HOLD" : "↓ OUT"}
+              {phase === "Breathe in…"
+                ? "IN (4s)"
+                : phase === "Hold…"
+                ? "HOLD (4s)"
+                : "OUT (4s)"}
             </p>
           )}
 
-          <p className={`text-muted-fg ${elderMode ? "text-sm" : "text-xs"}`} aria-live="polite">
-            {mins > 0 ? `${mins} minute${mins > 1 ? "s" : ""} this session` : "0 min this session"}
+          <p className={`text-ink-muted ${elderMode ? "text-base" : "text-xs"}`} aria-live="polite">
+            {mins > 0
+              ? `${mins} minute${mins > 1 ? "s" : ""} this session`
+              : "0 min this session"}
           </p>
 
           <Btn
             kind={on ? "danger" : "primary"}
             onClick={() => {
               if (on) stop();
-              else { setOn(true); setSec(0); setShowStopPrompt(false); }
+              else {
+                setOn(true);
+                setSec(0);
+                setShowStopPrompt(false);
+              }
             }}
             label={on ? "Stop breathing exercise" : "Begin breathing exercise"}
-            className={elderMode ? "text-base px-8 py-3" : ""}
+            className={elderMode ? "!min-h-[56px] !text-lg px-8" : "px-6"}
           >
             {on ? "Stop" : "Begin"}
           </Btn>
 
           {/* Auto-stop prompt for elder mode at 5 minutes */}
           {showStopPrompt && (
-            <div className="rounded-2xl bg-muted p-3 text-center" role="alert">
-              <p className="text-sm font-bold">
+            <div className="rounded-2xl bg-surface-sunken p-4 text-center border border-border mt-2" role="alert">
+              <p className="text-base font-bold text-ink">
                 You've been breathing for {mins} minutes — great job!
               </p>
-              <p className="mt-1 text-xs text-muted-fg">
+              <p className="mt-1 text-sm text-ink-muted">
                 Would you like to continue or stop?
               </p>
-              <div className="mt-2 flex justify-center gap-2">
-                <Btn kind="ghost" onClick={() => setShowStopPrompt(false)} label="Continue breathing exercise">
+              <div className="mt-3 flex justify-center gap-2">
+                <Btn
+                  kind="ghost"
+                  onClick={() => setShowStopPrompt(false)}
+                  label="Continue breathing exercise"
+                >
                   Keep going
                 </Btn>
                 <Btn kind="primary" onClick={stop} label="Stop breathing exercise">
