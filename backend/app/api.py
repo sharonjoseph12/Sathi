@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app import models, schemas
-from app.auth import check_pw, current_user, get_db, hash_pw, need_roles, rate_limit_login, token_for
+from app.auth import check_pw, clear_login_attempts, current_user, get_db, hash_pw, need_roles, rate_limit_login, token_for
 from app.database import engine
 from app import safety as S
 from app.ai_engine import companion_reply
@@ -102,6 +102,7 @@ def login(body: schemas.LoginIn, db: Session = Depends(get_db)):
     u = db.query(models.User).filter(models.User.email == body.email).first()
     if not u or not check_pw(body.password, u.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    clear_login_attempts(body.email.strip().lower())
     links = db.query(models.CareLink).filter(models.CareLink.user_id == u.id,
                                              models.CareLink.status == "active").all()
     mine = db.query(models.Patient).filter(models.Patient.owner_user_id == u.id).all()

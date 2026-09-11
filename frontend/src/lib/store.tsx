@@ -44,16 +44,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     try {
       const r = await api.login({ email, password });
-      tok.set(r.token); await refresh();
+      tok.set(r.token);
+      const m = await api.me();
+      setMe(m);
+      if (!pid && m.patients[0]) setPid(m.patients[0].id);
       return null;
-    } catch (e) { return e instanceof Error ? e.message : "login failed"; }
+    } catch (e) {
+      tok.clear();
+      setMe(null);
+      return e instanceof Error ? e.message : "login failed";
+    }
   };
   const register = async (b: object) => {
     try {
       const r = await api.register(b);
-      tok.set(r.token); await refresh();
+      tok.set(r.token);
+      const m = await api.me();
+      setMe(m);
+      if (!pid && m.patients[0]) setPid(m.patients[0].id);
       return null;
-    } catch (e) { return e instanceof Error ? e.message : "signup failed"; }
+    } catch (e) {
+      tok.clear();
+      setMe(null);
+      return e instanceof Error ? e.message : "signup failed";
+    }
   };
   const logout = () => { tok.clear(); setMe(null); location.hash = "#/login"; };
 
