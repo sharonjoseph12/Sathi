@@ -17,13 +17,12 @@ import { AppProvider, go, useApp, useHash } from "./lib/store";
 import { OfflineBanner } from "./components/ui";
 import { Icon } from "./components/icons";
 import { useEffect, useState, type ReactNode } from "react";
-import { Login, Register } from "./screens/auth";
 import { Onboarding } from "./screens/onboarding";
-import {
-  Home,
-  Medicines,
-  Symptoms,
-} from "./screens/tabs";
+import { Login } from "./screens/login";
+import { Register } from "./screens/register";
+import { Home } from "./screens/home";
+import { Medicines } from "./screens/medicines";
+import { Symptoms } from "./screens/symptoms";
 import { Schedule } from "./screens/schedule";
 import { Progress } from "./screens/progress";
 import { Followups } from "./screens/followups";

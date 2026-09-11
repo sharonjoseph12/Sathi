@@ -146,3 +146,14 @@ export function getAdaptiveClasses(profile: AdaptiveProfile): string[] {
   if (profile.prefersReducedMotion) cls.push("reduced-motion");
   return cls;
 }
+
+// ── Backward-compatible convenience helpers (used by Dev 2 screens) ──
+// These wrap the new boolean properties for call-site compatibility.
+
+export const isElder = (p: AdaptiveProfile) => p.isElder;
+export const isLowLiteracy = (p: AdaptiveProfile) => p.isLowLiteracy;
+export const isCaregiver = (p: AdaptiveProfile) => p.isCaregiver;
+export const wantsLargeText = (p: AdaptiveProfile) => p.prefersLargeText;
+export const wantsHighContrast = (p: AdaptiveProfile) => p.prefersHighContrast;
+export const wantsVoicePrimary = (p: AdaptiveProfile) => p.prefersVoice;
+export const wantsReducedMotion = (p: AdaptiveProfile) => p.prefersReducedMotion;
