@@ -1,18 +1,17 @@
 /**
- * useAdaptiveProfile — STUB (Dev 1 owns the real implementation)
+ * useAdaptiveProfile — Real implementation (Dev 1)
  *
- * Contract agreed on Day 0. Dev 1 replaces this file at the midpoint
- * checkpoint. Every consumer (Dev 2, Dev 3, Dev 4) imports from here
- * and gets the real logic automatically on swap-in — zero changes needed
- * in their own files.
- *
- * Until then, this stub derives a sensible profile from the existing
- * `me.role` so screens work end-to-end during parallel development.
+ * Every component/screen imports this to branch on render variant (elder/standard/caregiver).
+ * Consumers never pass variant props — they call useAdaptiveProfile() and read the result.
  */
+
+import { useMemo } from "react";
 import { useApp } from "./store";
 
+// ── Raw profile field types ──────────────────────────────────────────
+
 export type AgeBand = "elder" | "adult" | "young_adult" | "guardian";
-export type Role = "patient" | "caregiver" | "guardian";
+export type Role = "patient" | "caregiver" | "guardian" | "family";
 export type DigitalLiteracy = "low" | "medium" | "high";
 export type UrgencyLevel = "normal" | "monitor" | "escalate";
 export type AccessibilityFlag =
@@ -21,62 +20,129 @@ export type AccessibilityFlag =
   | "voice_primary"
   | "reduced_motion";
 
-export type AdaptiveProfile = {
+// ── Raw stored fields (persisted in localStorage until backend adds them) ──
+
+export type AdaptiveProfileRaw = {
   ageBand: AgeBand;
-  role: Role;
   digitalLiteracy: DigitalLiteracy;
   urgencyLevel: UrgencyLevel;
   accessibilityFlags: AccessibilityFlag[];
-  /** True when ageBand === 'elder' AND digitalLiteracy === 'low' — the most
-   * constrained render variant (5-nav cap, ≥20px text, no graphs). */
-  isElderMode: boolean;
-  /** True for caregiver or guardian roles — shows attention-only views. */
-  isCareMode: boolean;
 };
 
-/** Stub default — replaced by Dev 1's real hook at midpoint checkpoint. */
-const STUB_DEFAULT: AdaptiveProfile = {
+// ── Derived profile (what consumers actually read) ───────────────────
+
+export type AdaptiveProfile = AdaptiveProfileRaw & {
+  role: Role;
+  // Convenience booleans — avoid repeated string comparisons in every component
+  isElder: boolean;
+  isCaregiver: boolean;
+  isGuardian: boolean;
+  isLowLiteracy: boolean;
+  prefersLargeText: boolean;
+  prefersHighContrast: boolean;
+  prefersVoice: boolean;
+  prefersReducedMotion: boolean;
+  // Layout constraints
+  maxNavItems: number; // 5 for elder, unrestricted otherwise
+  fontScale: number;   // 1.0 standard, 1.35 elder
+  // Dev 3 convenience alias — keeps consumers readable
+  isElderMode: boolean; // = isElder (alias for backward compat with Dev 3 consumers)
+  isCareMode: boolean;  // = isCaregiver || isGuardian
+};
+
+// ── localStorage persistence ─────────────────────────────────────────
+
+const PROFILE_KEY = "@sathi_adaptive_profile";
+
+const DEFAULT_RAW: AdaptiveProfileRaw = {
   ageBand: "adult",
-  role: "patient",
   digitalLiteracy: "medium",
   urgencyLevel: "normal",
   accessibilityFlags: [],
-  isElderMode: false,
-  isCareMode: false,
 };
 
-export function useAdaptiveProfile(): AdaptiveProfile {
-  // STUB: derive a basic profile from the existing auth context.
-  // Dev 1 replaces this body with real profile-store logic.
-  const { me } = useApp();
-  if (!me) return STUB_DEFAULT;
+export function loadAdaptiveProfileRaw(): AdaptiveProfileRaw {
+  try {
+    const stored = localStorage.getItem(PROFILE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as Partial<AdaptiveProfileRaw>;
+      return {
+        ageBand: parsed.ageBand ?? DEFAULT_RAW.ageBand,
+        digitalLiteracy: parsed.digitalLiteracy ?? DEFAULT_RAW.digitalLiteracy,
+        urgencyLevel: parsed.urgencyLevel ?? DEFAULT_RAW.urgencyLevel,
+        accessibilityFlags:
+          parsed.accessibilityFlags ?? DEFAULT_RAW.accessibilityFlags,
+      };
+    }
+  } catch {
+    /* corrupt or missing — use defaults */
+  }
+  return { ...DEFAULT_RAW };
+}
 
-  const role: Role =
-    me.role === "caregiver" || me.role === "family"
-      ? "caregiver"
-      : me.role === "guardian"
-      ? "guardian"
-      : "patient";
+export function saveAdaptiveProfileRaw(raw: AdaptiveProfileRaw): void {
+  try {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(raw));
+  } catch {
+    /* storage full — degrade gracefully */
+  }
+}
 
-  // STUB: no real ageBand/digitalLiteracy data yet — default to adult/medium.
-  // Override via ?stub_elder=1 in the URL for development testing.
-  const forceElder =
+// ── Derivation: raw fields → full AdaptiveProfile ────────────────────
+
+function derive(raw: AdaptiveProfileRaw, role: Role): AdaptiveProfile {
+  const isElder = raw.ageBand === "elder";
+  const isCaregiver = role === "caregiver";
+  const isGuardian = role === "guardian" || raw.ageBand === "guardian";
+  const isLowLiteracy = raw.digitalLiteracy === "low";
+  const flags = new Set(raw.accessibilityFlags);
+
+  // Elder users get large text and high contrast by default, even if not explicitly flagged
+  const prefersLargeText = flags.has("large_text") || isElder;
+  const prefersHighContrast = flags.has("high_contrast") || isElder;
+
+  // Check OS-level reduced-motion preference as a fallback
+  const osReducedMotion =
     typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("stub_elder") === "1";
-
-  const ageBand: AgeBand = forceElder ? "elder" : "adult";
-  const digitalLiteracy: DigitalLiteracy = forceElder ? "low" : "medium";
-  const accessibilityFlags: AccessibilityFlag[] = forceElder
-    ? ["large_text", "high_contrast"]
-    : [];
+    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 
   return {
-    ageBand,
+    ...raw,
     role,
-    digitalLiteracy,
-    urgencyLevel: "normal",
-    accessibilityFlags,
-    isElderMode: ageBand === "elder" && digitalLiteracy === "low",
-    isCareMode: role === "caregiver" || role === "guardian",
+    isElder,
+    isCaregiver,
+    isGuardian,
+    isLowLiteracy,
+    prefersLargeText,
+    prefersHighContrast,
+    prefersVoice: flags.has("voice_primary") || (isElder && isLowLiteracy),
+    prefersReducedMotion: flags.has("reduced_motion") || !!osReducedMotion,
+    maxNavItems: isElder ? 5 : 99,
+    fontScale: isElder ? 1.35 : 1.0,
+    // Convenience aliases for Dev 3 consumers (no changes needed in their files)
+    isElderMode: isElder,
+    isCareMode: isCaregiver || isGuardian,
   };
+}
+
+// ── The hook ─────────────────────────────────────────────────────────
+
+export function useAdaptiveProfile(): AdaptiveProfile {
+  const { me } = useApp();
+  const role = (me?.role ?? "patient") as Role;
+
+  return useMemo(() => {
+    const raw = loadAdaptiveProfileRaw();
+    return derive(raw, role);
+  }, [role]);
+}
+
+// ── CSS class helper: apply to <html> or a container ─────────────────
+// Called from the Shell after profile loads to toggle elder/standard tokens.
+
+export function getAdaptiveClasses(profile: AdaptiveProfile): string[] {
+  const cls: string[] = [];
+  if (profile.isElder || profile.prefersHighContrast) cls.push("elder");
+  if (profile.prefersReducedMotion) cls.push("reduced-motion");
+  return cls;
 }

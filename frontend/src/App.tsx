@@ -17,7 +17,8 @@ import { AppProvider, go, useApp, useHash } from "./lib/store";
 import { OfflineBanner } from "./components/ui";
 import { Icon } from "./components/icons";
 import { useEffect, useState, type ReactNode } from "react";
-import { Login, Register, Onboarding } from "./screens/auth";
+import { Login, Register } from "./screens/auth";
+import { Onboarding } from "./screens/onboarding";
 import {
   Home,
   Medicines,
@@ -49,6 +50,7 @@ import { t } from "./lib/i18n";
 import { checkDueDoses } from "./lib/notify";
 import {
   useAdaptiveProfile,
+  getAdaptiveClasses,
   type AdaptiveProfile,
 } from "./lib/useAdaptiveProfile";
 
@@ -306,7 +308,13 @@ function Shell() {
       /* noop */
     }
   }, [me?.theme]);
-
+  // Apply adaptive CSS classes (elder, reduced-motion) to the document root
+  useEffect(() => {
+    const cls = getAdaptiveClasses(profile);
+    const el = document.documentElement;
+    el.classList.remove("elder", "reduced-motion");
+    cls.forEach((c) => el.classList.add(c));
+  }, [profile]);
   useEffect(() => {
     if (!me || !pid) return;
     checkDueDoses(pid);
