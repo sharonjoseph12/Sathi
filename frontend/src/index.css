@@ -163,3 +163,42 @@ h1, h2, h3 { letter-spacing: -0.02em; }
   nav, .no-print { display: none !important; }
   body { font-size: 12pt; }
 }
+
+/* ═══ Elder-mode typography scale (WCAG 2.1 AAA §1.4.8) ═══
+   Applied via .elder-mode class on <main> by the Shell component when
+   isElderMode is true. Base font ≥20px, line-height ≥1.6, capped
+   line-length (~65ch). Dev 1 owns the high-contrast token set — these
+   are the typography-only rules Dev 3 owns.
+*/
+.elder-mode {
+  font-size: 20px;
+  line-height: 1.65;
+  letter-spacing: -0.005em;
+}
+.elder-mode p,
+.elder-mode span,
+.elder-mode label {
+  max-width: 65ch;
+}
+/* Elder nav labels slightly larger */
+.elder-mode nav button {
+  font-size: 14px;
+}
+/* Elder inputs — more padding, larger text */
+.elder-mode input,
+.elder-mode textarea,
+.elder-mode select {
+  font-size: 18px;
+  min-height: 52px;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+/* Elder buttons — bigger touch target, bolder */
+.elder-mode button.elder-btn {
+  min-height: 56px;
+  font-size: 18px;
+  font-weight: 700;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+

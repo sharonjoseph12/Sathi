@@ -1,118 +1,679 @@
-import { useEffect, useState } from "react";
+/**
+ * screens/care.tsx — Dev 3
+ * Rebuilt caregiver & family screens with alert-fatigue fix.
+ *
+ * Key changes vs the original:
+ * - CareDash: Two-section attention-first layout ("Needs attention now" vs
+ *   "All good"). "Why was I alerted?" expand + "Mark as not urgent" feedback
+ *   loop (blueprint §8.2 priority #4).
+ * - PatientDetail: Flagged-alert section at top if risk is MONITOR/ESCALATE.
+ *   Dismiss action that records the review (alert feedback loop).
+ * - FamilyDash: Emphasizes the quiet "all good" state. No link-code form.
+ * - CreatePlan: Unchanged from original.
+ */
+import { useEffect, useRef, useState } from "react";
 import { api, type Event } from "../lib/api";
 import { go } from "../lib/store";
-import { Badge, Btn, Card, Empty, Input, Area, Page, Ring } from "../components/ui";
+import {
+  Badge,
+  Btn,
+  Card,
+  Empty,
+  Input,
+  Area,
+  Page,
+  Ring,
+} from "../components/ui";
+import { Icon } from "../components/icons";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type CgPatient = {
+  id: number;
+  name: string;
+  condition: string;
+  rel: string;
+  adherence: number;
+  risk: string;
+  recent: string[];
+};
+
+// ─── Alert reason helpers ─────────────────────────────────────────────────────
+
+function alertReason(p: CgPatient): string {
+  if (p.risk === "ESCALATE" && p.recent[0])
+    return `ESCALATE — most recent symptom: "${p.recent[0]}"`;
+  if (p.risk === "ESCALATE") return "ESCALATE — safety rule triggered";
+  if (p.risk === "MONITOR" && p.recent[0])
+    return `MONITOR — needs watching: "${p.recent[0]}"`;
+  if (p.adherence < 50) return `Adherence is ${p.adherence}% — medicines may be missed`;
+  return "Flagged for your attention";
+}
+
+function needsAttention(p: CgPatient): boolean {
+  return p.risk === "ESCALATE" || p.risk === "MONITOR" || p.adherence < 50;
+}
+
+// ─── Attention card (single patient needing action) ───────────────────────────
+
+function AttentionCard({
+  p,
+  onDismiss,
+  onOpen,
+  onNudge,
+}: {
+  p: CgPatient;
+  onDismiss: (id: number) => void;
+  onOpen: (id: number) => void;
+  onNudge: (id: number) => void;
+}) {
+  const [showWhy, setShowWhy] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const [nudgeSent, setNudgeSent] = useState(false);
+  const whyRef = useRef<HTMLDivElement>(null);
+
+  if (dismissed) return null;
+
+  return (
+    <Card accent={p.risk === "ESCALATE" ? "#B42318" : "#D97706"}>
+      <div className="flex items-start gap-3">
+        <Ring pct={p.adherence} size={56} />
+        <div className="min-w-0 flex-1">
+          <p className="font-bold leading-tight">{p.name}</p>
+          <p className="text-xs text-muted-fg">
+            {p.condition} · {p.rel}
+          </p>
+          {p.recent[0] && (
+            <p className="mt-1 text-xs">Latest: {p.recent[0]}</p>
+          )}
+        </div>
+        <Badge level={p.risk} />
+      </div>
+
+      {/* Action row */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Btn
+          onClick={() => onOpen(p.id)}
+          label={`Open ${p.name}'s detail`}
+        >
+          View details
+        </Btn>
+        <Btn
+          kind="ghost"
+          label={`Send encouragement to ${p.name}`}
+          onClick={async () => {
+            await onNudge(p.id);
+            setNudgeSent(true);
+            setTimeout(() => setNudgeSent(false), 3000);
+          }}
+        >
+          {nudgeSent ? "✓ Sent" : "💜 Nudge"}
+        </Btn>
+      </div>
+
+      {/* Why + dismiss row */}
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button
+          aria-expanded={showWhy}
+          aria-controls={`why-${p.id}`}
+          onClick={() => {
+            setShowWhy((v) => !v);
+            setTimeout(() => whyRef.current?.focus(), 50);
+          }}
+          className="min-h-[44px] rounded-xl px-4 py-2 text-xs font-bold text-primary underline-offset-2 hover:underline"
+        >
+          {showWhy ? "Hide reason ▲" : "Why am I seeing this? ▼"}
+        </button>
+        <button
+          onClick={() => {
+            onDismiss(p.id);
+            setDismissed(true);
+          }}
+          className="min-h-[44px] rounded-xl px-4 py-2 text-xs font-bold text-muted-fg hover:text-ink"
+          aria-label={`Mark ${p.name}'s alert as not urgent`}
+        >
+          Mark as not urgent
+        </button>
+      </div>
+
+      {showWhy && (
+        <div
+          id={`why-${p.id}`}
+          ref={whyRef}
+          tabIndex={-1}
+          role="region"
+          aria-label={`Reason for alert on ${p.name}`}
+          className="mt-2 rounded-xl bg-muted px-3 py-2 text-xs text-muted-fg outline-none"
+        >
+          <span className="font-semibold text-ink">Rule triggered: </span>
+          {alertReason(p)}
+          <p className="mt-1">
+            No diagnosis made. This alert is generated by a safety rule, not
+            clinical judgement.
+          </p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ─── CareDash ─────────────────────────────────────────────────────────────────
 
 export function CareDash() {
-  const [list, setList] = useState<{ id: number; name: string; condition: string; rel: string; adherence: number; risk: string; recent: string[] }[]>([]);
+  const [list, setList] = useState<CgPatient[]>([]);
+  const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const [code, setCode] = useState("");
   const [msg, setMsg] = useState("");
-  const load = () => api.cgPatients().then(setList).catch(() => setMsg("Could not load — are you logged in as caregiver/family?"));
-  useEffect(() => { load(); }, []);
+
+  const load = () =>
+    api
+      .cgPatients()
+      .then(setList)
+      .catch(() =>
+        setMsg("Could not load — are you logged in as caregiver/family?")
+      );
+
+  useEffect(() => {
+    load();
+  }, []);
+
   const connect = async () => {
-    try { const r = await api.connect(code) as { patient_name: string }; setMsg(`Linked to ${r.patient_name}`); setCode(""); load(); }
-    catch (e) { setMsg(e instanceof Error ? e.message : "invalid code"); }
+    try {
+      const r = (await api.connect(code)) as { patient_name: string };
+      setMsg(`Linked to ${r.patient_name}`);
+      setCode("");
+      load();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Invalid code");
+    }
+  };
+
+  const dismiss = async (id: number) => {
+    // Record the "not urgent" feedback — nudge with a neutral marker so the
+    // server can tune thresholds. Replace with a dedicated dismissal endpoint
+    // once backend adds one (Phase 4 backend work).
+    try {
+      await api.nudge(id, "__dismiss_alert__");
+    } catch {
+      /* non-blocking — feedback is best-effort */
+    }
+    setDismissed((prev) => new Set([...prev, id]));
+  };
+
+  const nudge = async (id: number) => {
+    await api.nudge(id, "💜 Thinking of you — keep going!");
+  };
+
+  const attention = list.filter(
+    (p) => needsAttention(p) && !dismissed.has(p.id)
+  );
+  const allGood = list.filter(
+    (p) => !needsAttention(p) || dismissed.has(p.id)
+  );
+
+  const alertCount = attention.length;
+
+  return (
+    <div className="grid gap-4">
+      <Page title="Care dashboard" sub="Focused on what needs your attention" />
+
+      {/* Link code */}
+      <Card>
+        <div className="flex gap-2">
+          <Input
+            placeholder="Link code (e.g. DB-XXXXXX)"
+            value={code}
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            aria-label="Patient link code"
+          />
+          <Btn onClick={connect} label="Link to patient with this code">
+            Link
+          </Btn>
+        </div>
+        {msg && <p className="mt-1 text-xs">{msg}</p>}
+      </Card>
+
+      {/* Attention-needed section */}
+      <section aria-label="Patients needing attention">
+        {/* Live region: screen reader announces count changes */}
+        <div
+          aria-live="polite"
+          aria-atomic="true"
+          className="mb-3 flex items-center gap-2"
+        >
+          {alertCount > 0 ? (
+            <>
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-danger text-xs font-bold text-white">
+                {alertCount}
+              </span>
+              <h2 className="text-base font-bold text-danger">
+                {alertCount === 1
+                  ? "1 patient needs attention now"
+                  : `${alertCount} patients need attention now`}
+              </h2>
+            </>
+          ) : (
+            <h2 className="text-base font-bold text-muted-fg">
+              Needs attention now
+            </h2>
+          )}
+        </div>
+
+        {alertCount === 0 && list.length > 0 && (
+          <div className="rounded-2xl border border-dashed border-emerald-300 bg-emerald-50 p-4 text-center dark:bg-emerald-950/20">
+            <p className="text-2xl" aria-hidden="true">
+              ✅
+            </p>
+            <p className="mt-1 text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+              All patients are doing well
+            </p>
+            <p className="mt-0.5 text-xs text-muted-fg">
+              No alerts at this time
+            </p>
+          </div>
+        )}
+
+        {attention.map((p) => (
+          <div key={p.id} className="mb-3">
+            <AttentionCard
+              p={p}
+              onDismiss={dismiss}
+              onOpen={(id) => go(`#/care/${id}`)}
+              onNudge={nudge}
+            />
+          </div>
+        ))}
+      </section>
+
+      {/* All-good section — compact summary, not individual full cards */}
+      {allGood.length > 0 && (
+        <section aria-label="Patients with no current alerts">
+          <h2 className="mb-2 text-sm font-bold text-muted-fg">
+            ✅ All good ({allGood.length}{" "}
+            {allGood.length === 1 ? "patient" : "patients"})
+          </h2>
+          <Card>
+            <div className="grid gap-2">
+              {allGood.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => go(`#/care/${p.id}`)}
+                  className="flex min-h-[44px] items-center gap-3 rounded-xl px-2 py-1 text-left hover:bg-muted active:scale-[0.99]"
+                  aria-label={`Open ${p.name}'s details — adherence ${p.adherence}%`}
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800">
+                    {p.adherence}%
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{p.name}</p>
+                    <p className="truncate text-xs text-muted-fg">
+                      {p.condition}
+                    </p>
+                  </div>
+                  <Icon name="arrow" size={14} />
+                </button>
+              ))}
+            </div>
+          </Card>
+        </section>
+      )}
+
+      {list.length === 0 && (
+        <Empty text="No linked patients yet — enter a link code above." />
+      )}
+    </div>
+  );
+}
+
+// ─── PatientDetail ────────────────────────────────────────────────────────────
+
+export function PatientDetail({ id }: { id: number }) {
+  type Detail = {
+    timeline: Event[];
+    symptoms: { symptoms: string[]; severity: number; risk: string }[];
+    doses: { name: string; status: string }[];
+    followups: { title: string }[];
+  };
+
+  const [d, setD] = useState<Detail | null>(null);
+  const [rem, setRem] = useState("");
+  const [nmsg, setNmsg] = useState("");
+  const [alertDismissed, setAlertDismissed] = useState(false);
+
+  const presets = [
+    "💜 Proud of your recovery today!",
+    "💊 Time for your medicines",
+    "🚶 Time for a short walk",
+    "📅 Don't forget your follow-up",
+  ];
+
+  const sendNudge = async (text: string) => {
+    if (!text) return;
+    try {
+      await api.nudge(id, text);
+      setNmsg("✓ Sent");
+      setTimeout(() => setNmsg(""), 3000);
+    } catch (e) {
+      setNmsg(e instanceof Error ? e.message : "failed");
+    }
+  };
+
+  const dismissAlert = async () => {
+    try {
+      await api.nudge(id, "__dismiss_alert__");
+    } catch {
+      /* best-effort */
+    }
+    setAlertDismissed(true);
+  };
+
+  useEffect(() => {
+    api
+      .cgDetail(id)
+      .then(setD)
+      .catch(() => {});
+  }, [id]);
+
+  if (!d) return <Empty text="Loading…" />;
+
+  const topRisk = d.symptoms[0]?.risk ?? "NORMAL";
+  const flagged =
+    !alertDismissed &&
+    (topRisk === "ESCALATE" || topRisk === "MONITOR");
+
+  return (
+    <div className="grid gap-3">
+      <Page
+        title={`Patient #${id}`}
+        right={
+          <Btn kind="ghost" onClick={() => go("#/care")}>
+            ← All
+          </Btn>
+        }
+      />
+
+      {/* Flagged-alert banner at top of detail */}
+      {flagged && (
+        <Card accent={topRisk === "ESCALATE" ? "#B42318" : "#D97706"}>
+          <div className="flex items-start gap-3">
+            <Icon name="alert" size={20} />
+            <div className="flex-1">
+              <p className="font-bold text-sm">
+                {topRisk === "ESCALATE"
+                  ? "Safety alert — please check in with this patient"
+                  : "Monitoring — keep an eye on this patient"}
+              </p>
+              {d.symptoms[0] && (
+                <p className="mt-1 text-xs text-muted-fg">
+                  Last symptom: "{d.symptoms[0].symptoms[0]}" ·{" "}
+                  {d.symptoms[0].severity}/10
+                </p>
+              )}
+              <p className="mt-1 text-[11px] text-muted-fg">
+                Rule triggered: {topRisk} state from symptom report. No
+                diagnosis made.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={dismissAlert}
+            className="mt-2 min-h-[44px] rounded-xl px-4 py-2 text-xs font-bold text-muted-fg hover:text-ink"
+          >
+            Mark as reviewed — not urgent
+          </button>
+        </Card>
+      )}
+
+      {/* Today's doses */}
+      <Card>
+        <h3 className="mb-1 font-bold">Today's doses</h3>
+        {d.doses.map((x, i) => (
+          <p key={i} className="text-sm">
+            •{" "}
+            <span className="font-medium">{x.name}</span> —{" "}
+            <span
+              className={
+                x.status === "taken"
+                  ? "text-emerald-700 dark:text-emerald-400"
+                  : "text-amber-700 dark:text-amber-400"
+              }
+            >
+              {x.status}
+            </span>
+          </p>
+        ))}
+        {d.doses.length === 0 && (
+          <p className="text-sm text-muted-fg">No medicines.</p>
+        )}
+      </Card>
+
+      {/* Recent symptoms */}
+      <Card>
+        <h3 className="mb-1 font-bold">Recent symptoms</h3>
+        {d.symptoms.map((s, i) => (
+          <div key={i} className="mb-1 flex items-center justify-between">
+            <p className="text-sm">
+              • {s.symptoms[0]}{" "}
+              <span className="text-xs text-muted-fg">
+                ({s.severity}/10)
+              </span>
+            </p>
+            <Badge level={s.risk} />
+          </div>
+        ))}
+        {d.symptoms.length === 0 && (
+          <p className="text-sm text-muted-fg">None reported.</p>
+        )}
+      </Card>
+
+      {/* Nudge / reminder */}
+      <Card>
+        <h3 className="mb-1 font-bold">Send reminder / nudge</h3>
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {presets.map((p) => (
+            <button
+              key={p}
+              onClick={() => sendNudge(p)}
+              className="min-h-[44px] rounded-full bg-secondary px-3 py-1.5 text-xs font-bold text-primary"
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <Input
+            placeholder="or write your own…"
+            value={rem}
+            onChange={(e) => setRem(e.target.value)}
+            aria-label="Custom nudge message"
+          />
+          <Btn
+            onClick={async () => {
+              await sendNudge(rem);
+              setRem("");
+            }}
+            label="Send nudge"
+          >
+            Send
+          </Btn>
+        </div>
+        {nmsg && <p className="mt-1 text-xs">{nmsg}</p>}
+        <p className="mt-1 text-[11px] text-muted-fg">
+          Max 3 nudges/hour per patient (anti-spam).
+        </p>
+        <div className="mt-2">
+          <Btn
+            kind="ghost"
+            onClick={() => go(`#/plan/${id}`)}
+            label="Create a discharge plan for this patient"
+          >
+            Create plan
+          </Btn>
+        </div>
+      </Card>
+
+      {/* Timeline */}
+      <Card>
+        <h3 className="mb-1 font-bold">Timeline</h3>
+        {d.timeline.slice(0, 10).map((e, i) => (
+          <p key={i} className="text-sm">
+            • {e.description}{" "}
+            <span className="text-xs text-muted-fg">{e.event_type}</span>
+          </p>
+        ))}
+        {d.timeline.length === 0 && (
+          <p className="text-sm text-muted-fg">No events yet.</p>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ─── CreatePlan ───────────────────────────────────────────────────────────────
+
+export function CreatePlan({ id }: { id: number }) {
+  const [hospital, setHospital] = useState("");
+  const [medText, setMedText] = useState(
+    '{"medicines": [{"name": "Amoxicillin 500mg", "dose": "1 capsule", "time": "08:00 AM"}]}'
+  );
+  const [msg, setMsg] = useState("");
+  const save = async () => {
+    try {
+      const r = (await api.addPlan(id, {
+        hospital,
+        data: medText,
+      })) as { version: number };
+      setMsg(`Plan v${r.version} saved + medicines imported`);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "failed");
+    }
   };
   return (
     <div className="grid gap-3">
-      <Page title="Caregiver dashboard" sub="All linked patients at a glance" />
-      <Card><div className="flex gap-2">
-        <Input placeholder="Link code (e.g. DB-XXXXXX)" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} />
-        <Btn onClick={connect}>Link</Btn>
-      </div>{msg && <p className="mt-1 text-xs">{msg}</p>}</Card>
+      <Page
+        title="Create discharge plan"
+        right={
+          <Btn kind="ghost" onClick={() => go(`#/care/${id}`)}>
+            ← Back
+          </Btn>
+        }
+      />
+      <Card>
+        <div className="grid gap-2">
+          <Input
+            placeholder="Hospital"
+            value={hospital}
+            onChange={(e) => setHospital(e.target.value)}
+            aria-label="Hospital name"
+          />
+          <Area
+            rows={6}
+            value={medText}
+            onChange={(e) => setMedText(e.target.value)}
+            aria-label="Discharge plan JSON"
+          />
+          {msg && <p className="text-xs font-semibold">{msg}</p>}
+          <Btn onClick={save} label="Save discharge plan">
+            Save plan
+          </Btn>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ─── FamilyDash ───────────────────────────────────────────────────────────────
+
+export function FamilyDash() {
+  const [list, setList] = useState<
+    { id: number; name: string; adherence: number; risk: string; recent: string[] }[]
+  >([]);
+  const [nudgeSent, setNudgeSent] = useState<Record<number, boolean>>({});
+
+  useEffect(() => {
+    api.cgPatients().then(setList).catch(() => {});
+  }, []);
+
+  const sendNudge = async (id: number) => {
+    await api.nudge(id, "💜 Proud of your recovery today!");
+    setNudgeSent((prev) => ({ ...prev, [id]: true }));
+    setTimeout(
+      () => setNudgeSent((prev) => ({ ...prev, [id]: false })),
+      3000
+    );
+  };
+
+  const alertCount = list.filter(
+    (p) => p.risk === "ESCALATE" || p.risk === "MONITOR"
+  ).length;
+
+  return (
+    <div className="grid gap-4">
+      <Page
+        title="Family view"
+        sub="Read-only — send encouragement anytime"
+      />
+
+      {/* Quiet-day state: large positive indicator when all is well */}
+      {list.length > 0 && alertCount === 0 && (
+        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-6 text-center dark:from-emerald-950/30 dark:to-transparent dark:border-emerald-800">
+          <p className="text-4xl" aria-hidden="true">
+            ✅
+          </p>
+          <p className="mt-2 text-lg font-bold text-emerald-800 dark:text-emerald-200">
+            Everyone is doing well
+          </p>
+          <p className="mt-1 text-sm text-muted-fg">
+            No alerts right now. Send a nudge to encourage them!
+          </p>
+        </div>
+      )}
+
+      {/* Alert indicator when there are concerns (read-only, no actions) */}
+      {alertCount > 0 && (
+        <div
+          role="alert"
+          className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:bg-amber-950/20"
+        >
+          <p className="flex items-center gap-2 text-sm font-bold text-amber-900 dark:text-amber-200">
+            <span aria-hidden="true">⚠</span>
+            {alertCount === 1
+              ? "1 family member may need extra support today"
+              : `${alertCount} family members may need extra support today`}
+          </p>
+          <p className="mt-1 text-xs text-muted-fg">
+            A caregiver has been notified. You can send encouragement below.
+          </p>
+        </div>
+      )}
+
+      {/* Patient cards — compact, read-only, nudge-focused */}
       {list.map((p) => (
         <Card key={p.id}>
           <div className="flex items-center gap-3">
             <Ring pct={p.adherence} size={64} />
-            <div className="flex-1"><p className="font-bold">{p.name}</p>
-              <p className="text-xs text-muted-fg">{p.condition} · {p.rel}</p>
-              {p.recent[0] && <p className="text-xs">Latest: {p.recent[0]}</p>}</div>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold">{p.name}</p>
+              <p className="text-xs text-muted-fg">
+                {p.recent[0] || "No recent symptoms reported"}
+              </p>
+            </div>
             <Badge level={p.risk} />
           </div>
-          <div className="mt-2 flex gap-2">
-            <Btn kind="ghost" onClick={() => go(`#/care/${p.id}`)}>Open</Btn>
-            <Btn kind="ghost" onClick={async () => { await api.nudge(p.id, "Thinking of you — keep going! 💜"); setMsg("Nudge sent"); }}>💜 Nudge</Btn>
-          </div>
+          <Btn
+            kind="ghost"
+            className="mt-3 w-full"
+            label={`Send encouragement to ${p.name}`}
+            onClick={() => sendNudge(p.id)}
+          >
+            {nudgeSent[p.id] ? "💜 Sent!" : "Send 💜 encouragement"}
+          </Btn>
         </Card>
       ))}
-      {list.length === 0 && <Empty text="No linked patients yet — enter a link code above." />}
-    </div>
-  );
-}
 
-export function PatientDetail({ id }: { id: number }) {
-  const [d, setD] = useState<{ timeline: Event[]; symptoms: { symptoms: string[]; severity: number; risk: string }[]; doses: { name: string; status: string }[]; followups: { title: string }[] } | null>(null);
-  const [rem, setRem] = useState("");
-  const [nmsg, setNmsg] = useState("");
-  const presets = ["💜 Proud of your recovery today!", "💊 Time for your medicines", "🚶 Time for a short walk", "📅 Don't forget your follow-up"];
-  const sendNudge = async (text: string) => {
-    if (!text) return;
-    try { await api.nudge(id, text); setNmsg("✓ Sent"); }
-    catch (e) { setNmsg(e instanceof Error ? e.message : "failed"); }
-  };
-  useEffect(() => { api.cgDetail(id).then(setD).catch(() => {}); }, [id]);
-  if (!d) return <Empty text="Loading…" />;
-  return (
-    <div className="grid gap-3">
-      <Page title={`Patient #${id}`} right={<Btn kind="ghost" onClick={() => go("#/care")}>← All</Btn>} />
-      <Card><h3 className="mb-1 font-bold">Today's doses</h3>
-        {d.doses.map((x, i) => <p key={i} className="text-sm">• {x.name} — <b>{x.status}</b></p>)}
-        {d.doses.length === 0 && <p className="text-sm text-muted-fg">No medicines.</p>}</Card>
-      <Card><h3 className="mb-1 font-bold">Recent symptoms</h3>
-        {d.symptoms.map((s, i) => <p key={i} className="text-sm">• {s.symptoms[0]} ({s.severity}/10) <Badge level={s.risk} /></p>)}
-        {d.symptoms.length === 0 && <p className="text-sm text-muted-fg">None reported.</p>}</Card>
-      <Card><h3 className="mb-1 font-bold">Send reminder / nudge</h3>
-        <div className="mb-2 flex flex-wrap gap-1.5">
-          {presets.map((p) => <button key={p} onClick={() => sendNudge(p)} className="rounded-full bg-secondary px-3 py-1.5 text-xs font-bold text-primary">{p}</button>)}
-        </div>
-        <div className="flex gap-2"><Input placeholder="or write your own…" value={rem} onChange={(e) => setRem(e.target.value)} />
-          <Btn onClick={async () => { await sendNudge(rem); setRem(""); }}>Send</Btn></div>
-        {nmsg && <p className="mt-1 text-xs">{nmsg}</p>}
-        <p className="text-[11px] text-muted-fg">Max 3 nudges/hour per patient (anti-spam).</p>
-        <div className="mt-2 flex gap-2"><Btn kind="ghost" onClick={() => go(`#/plan/${id}`)}>Create plan</Btn></div></Card>
-      <Card><h3 className="mb-1 font-bold">Timeline</h3>
-        {d.timeline.slice(0, 10).map((e, i) => <p key={i} className="text-sm">• {e.description} <span className="text-xs text-muted-fg">{e.event_type}</span></p>)}</Card>
-    </div>
-  );
-}
-
-export function CreatePlan({ id }: { id: number }) {
-  const [hospital, setHospital] = useState("");
-  const [medText, setMedText] = useState('{"medicines": [{"name": "Amoxicillin 500mg", "dose": "1 capsule", "time": "08:00 AM"}]}');
-  const [msg, setMsg] = useState("");
-  const save = async () => {
-    try { const r = await api.addPlan(id, { hospital, data: medText }) as { version: number }; setMsg(`Plan v${r.version} saved + medicines imported`); }
-    catch (e) { setMsg(e instanceof Error ? e.message : "failed"); }
-  };
-  return (
-    <div className="grid gap-3">
-      <Page title="Create discharge plan" right={<Btn kind="ghost" onClick={() => go(`#/care/${id}`)}>← Back</Btn>} />
-      <Card><div className="grid gap-2">
-        <Input placeholder="Hospital" value={hospital} onChange={(e) => setHospital(e.target.value)} />
-        <Area rows={6} value={medText} onChange={(e) => setMedText(e.target.value)} />
-        {msg && <p className="text-xs font-semibold">{msg}</p>}
-        <Btn onClick={save}>Save plan</Btn>
-      </div></Card>
-    </div>
-  );
-}
-
-export function FamilyDash() {
-  const [list, setList] = useState<{ id: number; name: string; adherence: number; risk: string; recent: string[] }[]>([]);
-  useEffect(() => { api.cgPatients().then(setList).catch(() => {}); }, []);
-  return (
-    <div className="grid gap-3">
-      <Page title="Family view" sub="Read-only status + encouragement" />
-      {list.map((p) => (
-        <Card key={p.id}><div className="flex items-center gap-3">
-          <Ring pct={p.adherence} size={64} />
-          <div className="flex-1"><p className="font-bold">{p.name}</p>
-            <p className="text-xs text-muted-fg">{p.recent[0] || "No recent symptoms"}</p></div>
-          <Badge level={p.risk} /></div>
-          <Btn kind="ghost" className="mt-2" onClick={async () => { await api.nudge(p.id, "💜 Proud of your recovery today!"); }}>Send 💜 nudge</Btn>
-        </Card>
-      ))}
-      {list.length === 0 && <Empty text="Nothing shared with you yet." />}
+      {list.length === 0 && (
+        <Empty text="Nothing shared with you yet. Ask a caregiver to add you to the care circle." />
+      )}
     </div>
   );
 }
