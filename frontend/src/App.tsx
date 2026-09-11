@@ -2,13 +2,14 @@ import { AppProvider, go, useApp, useHash } from "./lib/store";
 import { OfflineBanner } from "./components/ui";
 import { Icon } from "./components/icons";
 import { useEffect } from "react";
-import { Onboarding } from "./screens/auth";
+import { Onboarding } from "./screens/onboarding";
 import { Login } from "./screens/login";
 import { Register } from "./screens/register";
 import { Home } from "./screens/home";
 import { Medicines } from "./screens/medicines";
 import { Symptoms } from "./screens/symptoms";
 import { Schedule, Progress, Followups, Timeline } from "./screens/tabs";
+import { useAdaptiveProfile, getAdaptiveClasses } from "./lib/useAdaptiveProfile";
 import { Scan, Chat, DrugChecker, Simplify } from "./screens/tools";
 import { SOS } from "./screens/sos";
 import { Journal, Meditation } from "./screens/well";
@@ -65,11 +66,19 @@ function More() {
 function Shell() {
   const { me, pid, setPid } = useApp();
   const hash = useHash();
+  const profile = useAdaptiveProfile();
   // Hooks must run unconditionally — before any early return.
   useEffect(() => {
     document.documentElement.classList.toggle("dark", me?.theme === "dark");
     try { localStorage.setItem("@sathi_theme", me?.theme === "dark" ? "dark" : "light"); } catch { /* noop */ }
   }, [me?.theme]);
+  // Apply adaptive CSS classes (elder, reduced-motion) to the document element
+  useEffect(() => {
+    const cls = getAdaptiveClasses(profile);
+    const el = document.documentElement;
+    el.classList.remove("elder", "reduced-motion");
+    cls.forEach((c) => el.classList.add(c));
+  }, [profile]);
   useEffect(() => {
     if (!me || !pid) return;
     checkDueDoses(pid);
