@@ -19,6 +19,10 @@ import {
   X,
   ShieldAlert,
   Camera,
+  PencilLine,
+  FileText,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 /* ══════════════════════════════════════════════════════════════════
@@ -34,19 +38,54 @@ export function Scan() {
   const [blob, setBlob] = useState<Blob | null>(null);
   const [prog, setProg] = useState<number | null>(null);
   const [found, setFound] = useState<OcrMed[]>([]);
+  const [rawText, setRawText] = useState("");
+  const [showRaw, setShowRaw] = useState(false);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
-  const [mode, setMode] = useState<"ai" | "local">("ai");
+  const [mode, setMode] = useState<"donut" | "ai" | "local">("donut");
 
   const pick = (f: File | undefined) => {
     if (!f) return;
     setBlob(f);
     setImg(URL.createObjectURL(f));
     setFound([]);
+    setRawText("");
     setMsg("");
     const reader = new FileReader();
     reader.onload = () => setImgB64(String(reader.result));
     reader.readAsDataURL(f);
+  };
+
+  const runDonut = async () => {
+    if (!imgB64) return;
+    setBusy(true);
+    setProg(30);
+    setMsg("Reading doctor's handwriting with Donut AI model...");
+    try {
+      setProg(60);
+      const r = await api.handwritingOcr(imgB64);
+      setProg(100);
+      setRawText(r.raw_text || "");
+      if (r.raw_text) setShowRaw(true);
+      if (r.medicines && r.medicines.length > 0) {
+        setFound(
+          r.medicines.map((m) => ({
+            name: m.name || "",
+            dose: m.dose || "",
+            frequency: m.frequency || "",
+            time: m.time || "08:00 AM",
+            instructions: m.instructions || "",
+            confidence: 92,
+          }))
+        );
+      }
+      setMsg(r.message || "Doctor's handwriting analyzed. Review medicines below.");
+    } catch {
+      setMsg("Handwriting model unavailable — trying cloud AI vision...");
+      await runAI();
+    }
+    setBusy(false);
+    setProg(null);
   };
 
   const runAI = async () => {
@@ -54,8 +93,9 @@ export function Scan() {
     setBusy(true);
     setProg(50);
     try {
-      const r = await api.ocr(imgB64);
+      const r = await api.ocr(imgB64, "groq");
       setProg(100);
+      setRawText(r.raw_text || "");
       if (r.medicines && r.medicines.length > 0) {
         setFound(
           r.medicines.map((m) => ({
@@ -82,6 +122,7 @@ export function Scan() {
     setProg(0);
     try {
       const text = await ocrImage(blob, setProg);
+      setRawText(text);
       const meds = parseRxText(text);
       setFound(meds);
       setMsg(
@@ -96,7 +137,11 @@ export function Scan() {
     setProg(null);
   };
 
-  const run = () => (mode === "ai" ? runAI() : runLocal());
+  const run = () => {
+    if (mode === "donut") return runDonut();
+    if (mode === "ai") return runAI();
+    return runLocal();
+  };
 
   const edit = (i: number, k: keyof OcrMed, v: string) =>
     setFound((f) => f.map((m, j) => (j === i ? { ...m, [k]: v } : m)));
@@ -124,22 +169,35 @@ export function Scan() {
         title="Scan prescription"
         sub={
           elderMode
-            ? "Take a photo of your prescription to add medicines"
-            : "AI Vision + on-device OCR → review → import"
+            ? "Take a photo of your doctor's handwritten prescription to add medicines"
+            : "Hugging Face Donut Handwriting OCR + Vision + on-device fallback"
         }
       />
       <Card>
         <div className="grid gap-3">
           {/* Mode toggle */}
           {!elderMode && (
-            <div className="flex gap-2" role="radiogroup" aria-label="OCR extraction mode">
+            <div className="flex gap-2 flex-wrap" role="radiogroup" aria-label="OCR extraction mode">
+              <button
+                onClick={() => setMode("donut")}
+                role="radio"
+                aria-checked={mode === "donut"}
+                className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 rounded-full py-2 px-3 text-xs font-bold transition min-h-[44px] ${
+                  mode === "donut"
+                    ? "bg-primary text-white shadow-sm"
+                    : "bg-primary-soft text-primary hover:bg-primary/20"
+                }`}
+              >
+                <PencilLine className="h-4 w-4" aria-hidden="true" />
+                <span>Doctor Handwriting (Donut)</span>
+              </button>
               <button
                 onClick={() => setMode("ai")}
                 role="radio"
                 aria-checked={mode === "ai"}
-                className={`flex-1 flex items-center justify-center gap-2 rounded-full py-2 text-xs font-bold transition min-h-[44px] ${
+                className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 rounded-full py-2 px-3 text-xs font-bold transition min-h-[44px] ${
                   mode === "ai"
-                    ? "bg-primary text-white"
+                    ? "bg-primary text-white shadow-sm"
                     : "bg-primary-soft text-primary hover:bg-primary/20"
                 }`}
               >
@@ -150,9 +208,9 @@ export function Scan() {
                 onClick={() => setMode("local")}
                 role="radio"
                 aria-checked={mode === "local"}
-                className={`flex-1 flex items-center justify-center gap-2 rounded-full py-2 text-xs font-bold transition min-h-[44px] ${
+                className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 rounded-full py-2 px-3 text-xs font-bold transition min-h-[44px] ${
                   mode === "local"
-                    ? "bg-primary text-white"
+                    ? "bg-primary text-white shadow-sm"
                     : "bg-primary-soft text-primary hover:bg-primary/20"
                 }`}
               >
@@ -219,6 +277,39 @@ export function Scan() {
           )}
         </div>
       </Card>
+
+      {/* Raw Doctor's Handwriting Transcription Card */}
+      {rawText && (
+        <Card className="border border-primary/30 bg-surface-raised">
+          <button
+            onClick={() => setShowRaw((s) => !s)}
+            className="w-full flex items-center justify-between text-left"
+            aria-expanded={showRaw}
+          >
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-primary" aria-hidden="true" />
+              <span className="text-xs font-bold uppercase tracking-wider text-ink">
+                Doctor's Handwriting Transcription
+              </span>
+            </div>
+            {showRaw ? (
+              <ChevronUp className="h-4 w-4 text-ink-muted" aria-hidden="true" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-ink-muted" aria-hidden="true" />
+            )}
+          </button>
+          {showRaw && (
+            <div className="mt-3 pt-3 border-t border-border">
+              <pre className="text-xs text-ink whitespace-pre-wrap font-mono bg-surface-sunken p-3 rounded-lg border border-border/60">
+                {rawText}
+              </pre>
+              <p className="mt-1 text-[11px] text-ink-muted">
+                Transcribed with Hugging Face Donut model (chinmays18/medical-prescription-ocr).
+              </p>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Candidate review cards */}
       {found.map((m, i) => (

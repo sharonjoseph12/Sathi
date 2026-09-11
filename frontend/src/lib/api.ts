@@ -134,7 +134,24 @@ export const api = {
   aiChat: (pid: number, message: string) => req<{ message: string; actions: { type: string; label: string }[]; safety: Safety }>(`/ai/chat`, J({ patient_id: pid, message })),
   simplify: (text: string) => req<{ simplified: string; expanded: string[] }>(`/ai/simplify`, J({ text })),
   drugCheck: (pid: number) => req<{ interactions: { pair: string[]; severity: string; description: string; advice: string }[]; hasCritical: boolean; note: string }>(`/ai/drug-check?patient_id=${pid}`, J({})),
-  ocr: (image?: string) => req<{ medicines: { name: string; dose: string; frequency: string; time: string; instructions: string }[]; needs_review: boolean; message: string }>(`/ai/ocr`, J({ image: image || "" })),
+  ocr: (image?: string, engine?: "donut" | "groq") =>
+    req<{
+      medicines: { name: string; dose: string; frequency: string; time: string; instructions: string }[];
+      raw_text?: string;
+      overall_instructions?: string;
+      model?: string;
+      needs_review: boolean;
+      message: string;
+    }>(`/ai/ocr`, J({ image: image || "", engine })),
+  handwritingOcr: (image?: string) =>
+    req<{
+      medicines: { name: string; dose: string; frequency: string; time: string; instructions: string }[];
+      raw_text?: string;
+      overall_instructions?: string;
+      model?: string;
+      needs_review: boolean;
+      message: string;
+    }>(`/ai/handwriting-ocr`, J({ image: image || "" })),
   transcribe: (audio: string) => req<{ text: string; language: string; message?: string }>(`/ai/transcribe`, J({ audio })),
   speak: (text: string, lang = "en") => req<{ audio: string; voice?: string; message?: string }>(`/ai/speak`, J({ text, lang })),
   journal: () => req<{ id: number; mood: number; energy: number; text: string }[]>("/journal"),

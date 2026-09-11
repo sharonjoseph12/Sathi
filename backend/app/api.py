@@ -687,9 +687,39 @@ def ai_drugcheck(patient_id: int, user: models.User = Depends(current_user), db:
     return S.drug_check([m.name for m in meds])
 
 
+@router.post("/ai/handwriting-ocr")
+async def ai_handwriting_ocr(payload: dict, user: models.User = Depends(current_user)):
+    """Analyze doctor's handwritten prescription using Hugging Face Donut model chinmays18/medical-prescription-ocr."""
+    import asyncio
+    from app import handwriting_ocr
+
+    image_b64 = (payload.get("image") or "").strip()
+    if not image_b64:
+        return {"medicines": [], "overall_instructions": "", "raw_text": "", "needs_review": True,
+                "message": "No image provided. Please upload a prescription photo."}
+
+    try:
+        # Run CPU/GPU heavy model inference in a thread pool to avoid blocking async loop
+        result = await asyncio.to_thread(handwriting_ocr.process_prescription_handwriting, image_b64)
+        return result
+    except Exception as exc:
+        logging.getLogger("sathi.api").error(f"Handwriting OCR error: {exc}", exc_info=True)
+        return {
+            "medicines": [],
+            "overall_instructions": "",
+            "raw_text": "",
+            "needs_review": True,
+            "message": f"Handwriting model processing encountered an issue: {exc}. Please verify manually.",
+        }
+
+
 @router.post("/ai/ocr")
-def ai_ocr(payload: dict, user: models.User = Depends(current_user)):
-    """Groq Llama 4 Scout Vision for prescription OCR. Falls back to empty + manual."""
+async def ai_ocr(payload: dict, user: models.User = Depends(current_user)):
+    """Extract prescription details. Supports engine='donut' (Hugging Face handwriting) or 'groq' (Vision)."""
+    engine = (payload.get("engine") or "").lower().strip()
+    if engine in ("donut", "handwriting", "chinmays18"):
+        return await ai_handwriting_ocr(payload, user)
+
     from app import groq_client as GC
     image_b64 = (payload.get("image") or "").strip()
     if not image_b64:
@@ -733,6 +763,7 @@ Rules:
     except (json.JSONDecodeError, ValueError):
         return {"medicines": [], "overall_instructions": "", "needs_review": True,
                 "message": "AI could not parse the image clearly. Please add medicines manually."}
+
 
 
 # ---------- voice: server STT (Groq Whisper) + TTS (Edge neural, no key) ----------
