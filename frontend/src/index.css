@@ -36,6 +36,43 @@
   color-scheme: dark;
 }
 
+/* ═══ Elder mode — high-contrast, large type, WCAG AAA (7:1) ═══ */
+.elder {
+  --s-bg: #fffdf7; --s-ink: #0a0a0a; --s-card: #ffffff;
+  --s-primary: #1a3fb5; --s-secondary: #e8edff;
+  --s-muted: #f5f3ee; --s-muted-fg: #2d2d2d;
+  --s-success: #065f46; --s-warning: #92400e; --s-danger: #991b1b;
+  --s-border: #b0b0b0;
+  color-scheme: light;
+}
+/* Elder + dark: high-contrast dark variant for elders who prefer dark mode */
+.elder.dark {
+  --s-bg: #0a0a0a; --s-ink: #f5f5f5; --s-card: #1a1a1a;
+  --s-primary: #93a3f8; --s-secondary: #1e2550;
+  --s-muted: #1c1c1c; --s-muted-fg: #d4d4d4;
+  --s-success: #4ade80; --s-warning: #fbbf24; --s-danger: #f87171;
+  --s-border: #404040;
+  color-scheme: dark;
+}
+
+/* Elder typography: ≥20px base, generous line-height, constrained line length */
+.elder body,
+.elder main {
+  font-size: 20px;
+  line-height: 1.6;
+}
+.elder p, .elder span, .elder label, .elder li {
+  max-width: 70ch;
+}
+.elder h1 { font-size: 2rem; }
+.elder h2 { font-size: 1.6rem; }
+.elder h3 { font-size: 1.3rem; }
+
+/* Elder touch targets: bump minimum to 56px */
+.elder :where(button, a, [role="button"], select, input, textarea) {
+  min-height: 56px;
+}
+
 body {
   @apply bg-bg text-ink font-sans antialiased;
   letter-spacing: -0.011em;
@@ -57,6 +94,11 @@ h1, h2, h3 { letter-spacing: -0.02em; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+/* Programmatic reduced-motion class (set by useAdaptiveProfile when flag is on) */
+.reduced-motion *, .reduced-motion *::before, .reduced-motion *::after {
+  animation-duration: 0.01ms !important;
+  transition-duration: 0.01ms !important;
 }
 
 /* Skip link */
