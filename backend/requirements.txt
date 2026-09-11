@@ -9,3 +9,8 @@ google-genai==1.0.0
 python-dotenv==1.0.0
 python-multipart==0.0.6
 edge-tts==7.0.0
+# Local prescription OCR (Donut). CPU wheels: pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch
+transformers>=4.36.0
+pillow
+sentencepiece

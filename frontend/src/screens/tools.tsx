@@ -15,7 +15,7 @@ export function Scan() {
   const [found, setFound] = useState<OcrMed[]>([]);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
-  const [mode, setMode] = useState<"ai" | "local">("ai");
+  const [mode, setMode] = useState<"ai" | "donut" | "local">("ai");
 
   const pick = (f: File | undefined) => {
     if (!f) return;
@@ -57,7 +57,24 @@ export function Scan() {
     setBusy(false); setProg(null);
   };
 
-  const run = () => mode === "ai" ? runAI() : runLocal();
+  const run = () => mode === "ai" ? runAI() : mode === "donut" ? runDonut() : runLocal();
+
+  const runDonut = async () => {
+    if (!imgB64) return;
+    setBusy(true); setProg(50);
+    try {
+      const r = await api.ocr(imgB64, "donut");
+      setProg(100);
+      if (r.medicines && r.medicines.length > 0) {
+        setFound(r.medicines.map((m) => ({
+          name: m.name || "", dose: m.dose || "", frequency: m.frequency || "",
+          time: m.time || "08:00 AM", instructions: m.instructions || "", confidence: 85,
+        })));
+      }
+      setMsg(r.message || "Done");
+    } catch { setMsg("Donut OCR failed — is the backend model loaded? Try AI Vision."); }
+    setBusy(false); setProg(null);
+  };
 
   const edit = (i: number, k: keyof OcrMed, v: string) =>
     setFound((f) => f.map((m, j) => (j === i ? { ...m, [k]: v } : m)));
@@ -75,13 +92,14 @@ export function Scan() {
       <Card><div className="grid gap-2">
         <div className="flex gap-2">
           <button onClick={() => setMode("ai")} className={`flex-1 rounded-full py-1.5 text-xs font-bold ${mode === "ai" ? "bg-primary text-white" : "bg-secondary text-primary"}`}>🤖 AI Vision (Groq)</button>
+          <button onClick={() => setMode("donut")} className={`flex-1 rounded-full py-1.5 text-xs font-bold ${mode === "donut" ? "bg-primary text-white" : "bg-secondary text-primary"}`}>🏠 Donut (on-device)</button>
           <button onClick={() => setMode("local")} className={`flex-1 rounded-full py-1.5 text-xs font-bold ${mode === "local" ? "bg-primary text-white" : "bg-secondary text-primary"}`}>📱 Local OCR</button>
         </div>
         <label className="grid cursor-pointer place-items-center rounded-2xl border-2 border-dashed border-border bg-muted p-6 text-center">
           <input type="file" accept="image/*" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
           {img ? <img src={img} alt="prescription" className="max-h-56 rounded-xl" /> : <span className="text-sm text-muted-fg">📷 Tap to snap / upload prescription</span>}
         </label>
-        <Btn onClick={run}>{busy ? "Reading…" : mode === "ai" ? "🔍 Extract with AI" : "🔍 Extract locally"}</Btn>
+        <Btn onClick={run}>{busy ? "Reading…" : mode === "ai" ? "🔍 Extract with AI" : mode === "donut" ? "🔍 Extract with Donut" : "🔍 Extract locally"}</Btn>
         {prog !== null && <div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary transition-all" style={{ width: `${prog}%` }} /></div>}
         {msg && <p className="rounded-xl bg-muted p-2 text-xs font-semibold">{msg}</p>}
         {mode === "ai" && <p className="text-[10px] text-muted-fg">⚠ AI-generated — always verify doses against your discharge paper.</p>}

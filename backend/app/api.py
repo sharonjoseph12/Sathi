@@ -686,20 +686,7 @@ def ai_drugcheck(patient_id: int, user: models.User = Depends(current_user), db:
     return S.drug_check([m.name for m in meds])
 
 
-@router.post("/ai/ocr")
-def ai_ocr(payload: dict, user: models.User = Depends(current_user)):
-    """Groq Llama 4 Scout Vision for prescription OCR. Falls back to empty + manual."""
-    from app import groq_client as GC
-    image_b64 = (payload.get("image") or "").strip()
-    if not image_b64:
-        return {"medicines": [], "overall_instructions": "", "needs_review": True,
-                "message": "No image provided. Please upload a prescription photo."}
-
-    # Strip data URL prefix if present
-    if "," in image_b64:
-        image_b64 = image_b64.split(",", 1)[1]
-
-    OCR_PROMPT = """Analyze this prescription/discharge document image and extract all medicines.
+_OCR_PROMPT = """Analyze this prescription/discharge document image and extract all medicines.
 Return ONLY a JSON object with this exact structure:
 {
   "medicines": [
@@ -713,25 +700,138 @@ Rules:
 - If any field is unclear, use empty string — NEVER guess doses.
 - Return ONLY the JSON, no other text."""
 
-    raw = GC.vision(image_b64, OCR_PROMPT)
-    if not raw:
-        return {"medicines": [], "overall_instructions": "", "needs_review": True,
-                "message": "AI extraction unavailable. Please add medicines manually — never guess doses from a photo."}
 
+def _parse_vision_json(raw: str):
+    """Parse vision-LLM JSON into (medicines, overall_instructions) or None."""
+    import re as _re
     try:
-        import re as _re
-        cleaned = raw.strip()
+        cleaned = (raw or "").strip()
         if cleaned.startswith("```"):
             cleaned = _re.sub(r"^```\w*\n?", "", cleaned)
             cleaned = _re.sub(r"\n?```$", "", cleaned)
         data = json.loads(cleaned)
-        meds = data.get("medicines", [])
-        overall = data.get("overall_instructions", "")
-        return {"medicines": meds, "overall_instructions": overall, "needs_review": True,
-                "message": f"{len(meds)} medicine(s) detected by AI — review everything before importing."}
-    except (json.JSONDecodeError, ValueError):
+        return data.get("medicines", []), data.get("overall_instructions", "")
+    except (json.JSONDecodeError, ValueError, AttributeError):
+        return None
+
+
+_STRUCTURE_PROMPT = """You convert raw OCR text from a medical prescription into structured data.
+Return ONLY a JSON object with this exact structure:
+{
+  "medicines": [
+    {"name": "Medicine Name", "dose": "500mg", "frequency": "Twice daily", "time": "08:00 AM", "instructions": "after meals"}
+  ],
+  "overall_instructions": "any general instructions from the document"
+}
+Rules:
+- Use ONLY what the OCR text says. If any field is unclear, use empty string — NEVER guess doses.
+- Convert abbreviations: OD=once daily, BD=twice daily, TDS=three times daily, PO=by mouth, PC=after meals, AC=before meals.
+- Default time to "08:00 AM" when timing is unknown.
+- Return ONLY the JSON, no other text."""
+
+
+def _regex_meds(text: str):
+    """Last-resort structuring when no LLM is available: dose-looking lines."""
+    import re as _re
+    meds = []
+    for line in (text or "").splitlines():
+        line = line.strip(" -*•\t")
+        if not line:
+            continue
+        dose = _re.search(r"\d+(?:\.\d+)?\s?(?:mg|g|mcg|ml|iu|units?)", line, _re.IGNORECASE)
+        if not dose:
+            continue
+        name = _re.sub(r"\d+(?:\.\d+)?\s?(?:mg|g|mcg|ml|iu|units?).*", "", line, flags=_re.IGNORECASE).strip(" -:,.") or line[:40]
+        meds.append({"name": name[:60], "dose": dose.group(0), "frequency": "",
+                     "time": "08:00 AM", "instructions": ""})
+        if len(meds) >= 20:
+            break
+    return meds
+
+
+def _structure_ocr_text(text: str):
+    """Turn Donut OCR text into (medicines, overall_instructions)."""
+    from app import groq_client as GC
+    raw = GC.chat([
+        {"role": "system", "content": _STRUCTURE_PROMPT},
+        {"role": "user", "content": (text or "")[:4000]},
+    ], temperature=0.1, max_tokens=800)
+    if raw:
+        parsed = _parse_vision_json(raw)
+        if parsed is not None:
+            return parsed
+    return _regex_meds(text), ""
+
+
+@router.post("/ai/ocr")
+def ai_ocr(payload: dict, user: models.User = Depends(current_user)):
+    """Prescription OCR. mode: auto (default) | vision | donut.
+
+    - vision: Gemini/Groq vision extracts structured medicines directly.
+    - donut: local Donut model reads raw text, then an LLM (or regex fallback)
+      structures it into medicines. Works with no vision API keys.
+    - auto: vision first, Donut fallback when vision is unavailable/failed.
+    Always needs_review — never trust doses blindly.
+    """
+    from app import groq_client as GC
+    from app import donut_ocr as DN
+    import base64 as _b64
+
+    image_b64 = (payload.get("image") or "").strip()
+    if not image_b64:
         return {"medicines": [], "overall_instructions": "", "needs_review": True,
-                "message": "AI could not parse the image clearly. Please add medicines manually."}
+                "message": "No image provided. Please upload a prescription photo."}
+
+    # Strip data URL prefix if present
+    if "," in image_b64:
+        image_b64 = image_b64.split(",", 1)[1]
+    try:
+        image_bytes = _b64.b64decode(image_b64)
+    except Exception:
+        return {"medicines": [], "overall_instructions": "", "needs_review": True,
+                "message": "Could not read the image. Please try another photo."}
+
+    mode = str(payload.get("mode") or "auto").strip().lower()
+    if mode not in ("auto", "vision", "donut"):
+        mode = "auto"
+
+    if mode in ("auto", "vision"):
+        raw = GC.vision(image_b64, _OCR_PROMPT)
+        if raw:
+            parsed = _parse_vision_json(raw)
+            if parsed is not None:
+                meds, overall = parsed
+                return {"medicines": meds, "overall_instructions": overall, "needs_review": True,
+                        "source": "vision",
+                        "message": f"{len(meds)} medicine(s) detected by AI — review everything before importing."}
+        if mode == "vision":
+            return {"medicines": [], "overall_instructions": "", "needs_review": True,
+                    "message": "AI extraction unavailable. Please add medicines manually — never guess doses from a photo."}
+        # auto: fall through to Donut
+
+    text = DN.extract_text(image_bytes)
+    if not text:
+        detail = DN.status().get("error") or "local OCR model unavailable"
+        return {"medicines": [], "overall_instructions": "", "needs_review": True,
+                "message": f"Donut OCR: {detail}. Please add medicines manually — never guess doses from a photo."}
+    meds, overall = _structure_ocr_text(text)
+    return {"medicines": meds, "overall_instructions": overall, "needs_review": True,
+            "source": "donut", "ocr_text": text[:2000],
+            "message": f"{len(meds)} medicine(s) read by the on-device model — review everything before importing."}
+
+
+@router.get("/ai/ocr-status")
+def ocr_status(user: models.User = Depends(current_user)):
+    """Which OCR engines are usable right now (for client mode toggles)."""
+    import os as _os
+    from app import donut_ocr as DN
+    return {
+        "donut": DN.status(),
+        "vision": {
+            "gemini": bool(_os.getenv("GEMINI_API_KEY")),
+            "groq": bool(_os.getenv("GROQ_API_KEY")),
+        },
+    }
 
 
 # ---------- voice: server STT (Groq Whisper) + TTS (Edge neural, no key) ----------
