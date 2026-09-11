@@ -4,7 +4,7 @@ import { ocrImage, parseRxText, type OcrMed } from "../lib/ocr";
 import { speakSmart, transcribeBlob } from "../lib/voice";
 import { useApp } from "../lib/store";
 import { Badge, Btn, Card, Empty, Input, Area, Page } from "../components/ui";
-import { listenOnce } from "./tabs";
+import { listenOnce } from "./home";
 
 export function Scan() {
   const { pid } = useApp();
@@ -245,7 +245,7 @@ export function Chat() {
           </div>
         )}
         <div className="flex gap-2">
-          <button onClick={() => listenOnce((t) => { setText(t); }, setListening)} title="Dictate" className="rounded-full bg-secondary px-3 text-lg">🎙</button>
+          <button onClick={() => listenOnce((t: string) => { setText(t); }, setListening)} title="Dictate" className="rounded-full bg-secondary px-3 text-lg">🎙</button>
           <button onClick={toggleRec} title="Voice note" className={`rounded-full px-3 text-lg ${recording ? "animate-mic bg-danger text-white" : "bg-secondary"}`}>🎤</button>
           <Input placeholder="Type a message…" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} />
           <Btn onClick={send}>Send</Btn>
