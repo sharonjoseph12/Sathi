@@ -205,8 +205,7 @@ Rules:
 - Time defaults: Once daily="08:00 AM", Twice daily="08:00 AM, 08:00 PM", Three times daily="08:00 AM, 02:00 PM, 08:00 PM", Bedtime="09:30 PM".
 - If dose is unspecified, put "As directed".
 - Return ONLY valid JSON array. No markdown, no commentary.
-"""
-        response = GC.complete(prompt, max_tokens=600, temperature=0.1)
+        response = GC.chat([{"role": "user", "content": prompt}], max_tokens=600, temperature=0.1)
         if not response:
             return None
 
