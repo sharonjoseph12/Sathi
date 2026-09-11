@@ -4,9 +4,12 @@ import { t } from "../lib/i18n";
 import { speakSmart } from "../lib/voice";
 import { go, useApp } from "../lib/store";
 import { Avatar, Badge, Btn, Card, Confetti, Empty, Ring, SectionLabel } from "../components/ui";
+import { toast } from "sonner";
+import { processVoiceCommand } from "../lib/voiceEngine";
 import {
   Pill,
   Check,
+  CheckCircle2,
   AlertTriangle,
   Sparkles,
   X,
@@ -75,41 +78,60 @@ function DemoGuide() {
 }
 
 // ── Elder medicine card ──────────────────────────────────────────────
-function ElderMedCard({ m, onTake }: { m: Med; onTake: () => void }) {
+function ElderMedCard({ m, isTaken, onTake }: { m: Med; isTaken: boolean; onTake: () => void }) {
   return (
-    <article className="mb-3 rounded-2xl border-2 border-border bg-surface p-5 shadow-sm">
-      <div className="mb-3">
-        <p className="text-xl font-bold leading-tight text-ink">{m.name}</p>
-        <p className="mt-1 flex items-center gap-1.5 text-base text-ink-muted">
-          <Clock className="h-4 w-4" aria-hidden="true" />
-          Take at {m.time}
-        </p>
+    <article className={`mb-3 rounded-2xl border-2 p-5 shadow-sm transition-all ${isTaken ? "border-success bg-success-bg/30" : "border-border bg-surface"}`}>
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div>
+          <p className="text-xl font-bold leading-tight text-ink">{m.name}</p>
+          <p className="mt-1 flex items-center gap-1.5 text-base text-ink-muted">
+            <Clock className="h-4 w-4" aria-hidden="true" />
+            Take at {m.time}
+          </p>
+        </div>
+        {isTaken && (
+          <span className="flex items-center gap-1 rounded-full bg-success px-3 py-1 text-xs font-bold text-white shadow-sm">
+            <Check className="h-3.5 w-3.5 stroke-[3]" />
+            Taken
+          </span>
+        )}
       </div>
-      <Btn onClick={onTake} className="!w-full !min-h-[60px] !text-xl !font-bold flex items-center justify-center gap-2">
+      <Btn
+        kind={isTaken ? "ghost" : "success"}
+        onClick={onTake}
+        className="!w-full !min-h-[60px] !text-xl !font-bold flex items-center justify-center gap-2"
+      >
         <Check className="h-6 w-6 stroke-[3]" aria-hidden="true" />
-        Take medicine
+        {isTaken ? "Taken today ✓" : "Take medicine"}
       </Btn>
     </article>
   );
 }
 
 // ── Standard medicine card ───────────────────────────────────────────
-function StandardMedCard({ m, onTake }: { m: Med; onTake: () => void }) {
+function StandardMedCard({ m, isTaken, onTake }: { m: Med; isTaken: boolean; onTake: () => void }) {
   return (
-    <article className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-border bg-surface p-3 transition hover:shadow-sm">
+    <article className={`mb-2 flex items-center justify-between gap-3 rounded-xl border p-3 transition hover:shadow-sm ${isTaken ? "border-success/40 bg-success-bg/15" : "border-border bg-surface"}`}>
       <div className="flex min-w-0 items-center gap-3">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-          <Pill className="h-5 w-5" aria-hidden="true" />
+        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${isTaken ? "bg-success/20 text-success" : "bg-primary/10 text-primary"}`}>
+          {isTaken ? <Check className="h-5 w-5 stroke-[2.5]" /> : <Pill className="h-5 w-5" />}
         </span>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-ink">{m.name}</p>
           <p className="text-xs text-ink-muted">{m.time} · {m.dose}</p>
         </div>
       </div>
-      <Btn onClick={onTake} className="flex items-center gap-1.5">
-        <Check className="h-4 w-4" aria-hidden="true" />
-        Mark taken
-      </Btn>
+      {isTaken ? (
+        <span className="flex items-center gap-1 rounded-full bg-success/15 px-3 py-1.5 text-xs font-bold text-success">
+          <Check className="h-3.5 w-3.5 stroke-[3]" />
+          Taken
+        </span>
+      ) : (
+        <Btn onClick={onTake} kind="primary" className="flex items-center gap-1.5">
+          <Check className="h-4 w-4" aria-hidden="true" />
+          Mark taken
+        </Btn>
+      )}
     </article>
   );
 }
@@ -148,13 +170,14 @@ function ElderQuickReport({ onReport }: { onReport: (text: string) => void }) {
 
 // ── Home — "Today" engine ────────────────────────────────────────────
 export function Home() {
-  const { me, pid } = useApp();
+  const { me, pid, adaptiveRaw, setAdaptiveProfile } = useApp();
   const profile = useAdaptiveProfile();
   const elder = isElder(profile);
   const reducedMotion = wantsReducedMotion(profile);
   const voicePrimary = wantsVoicePrimary(profile);
 
   const [meds, setMeds] = useState<Med[]>([]);
+  const [doseStatuses, setDoseStatuses] = useState<Record<number, string>>({});
   const [st, setSt] = useState({
     adherence: 0,
     taken_today: 0,
@@ -173,12 +196,16 @@ export function Home() {
   const load = async () => {
     if (!pid) return;
     try {
-      setMeds(await api.meds(pid));
-    } catch {
-      /* offline */
-    }
-    try {
-      setSt(await api.stats(pid));
+      const [mList, dList, stData] = await Promise.all([
+        api.meds(pid),
+        api.dosesToday(pid).catch(() => []),
+        api.stats(pid).catch(() => null),
+      ]);
+      setMeds(mList);
+      const map: Record<number, string> = {};
+      dList.forEach((d) => { map[d.medication_id] = d.status; });
+      setDoseStatuses(map);
+      if (stData) setSt(stData);
     } catch {
       /* offline */
     }
@@ -192,14 +219,40 @@ export function Home() {
   }
 
   const take = async (m: Med) => {
-    setMeds((ms) => ms.filter((x) => x.id !== m.id));
+    // Optimistic status update
+    setDoseStatuses((prev) => ({ ...prev, [m.id]: "taken" }));
+    setSt((prev) => {
+      const newTaken = prev.taken_today + 1;
+      const total = Math.max(newTaken, prev.total);
+      return {
+        ...prev,
+        taken_today: newTaken,
+        adherence: Math.min(100, Math.round((newTaken / total) * 100)),
+      };
+    });
     if (!reducedMotion) setBurst((b) => b + 1);
+    toast.success(`${m.name} marked as taken!`);
+    void speakSmart(`${m.name} marked as taken.`);
     try {
       await api.confirm(pid, m.id);
     } catch {
       /* queued offline */
     }
-    load();
+  };
+
+  const handleVoice = async (text: string) => {
+    const res = await processVoiceCommand(text, {
+      pid,
+      meds,
+      onMedUpdated: load,
+      adaptiveRaw,
+      setAdaptiveProfile,
+    });
+    if (res.handled) {
+      if (res.category === "medication") load();
+    } else {
+      report(text);
+    }
   };
 
   const report = async (text: string) => {
@@ -348,10 +401,26 @@ export function Home() {
           <div role="list" aria-label="Today's medicine list">
             {visibleMeds.map((m) =>
               elder ? (
-                <ElderMedCard key={m.id} m={m} onTake={() => take(m)} />
+                <ElderMedCard
+                  key={m.id}
+                  m={m}
+                  isTaken={doseStatuses[m.id] === "taken"}
+                  onTake={() => take(m)}
+                />
               ) : (
-                <StandardMedCard key={m.id} m={m} onTake={() => take(m)} />
+                <StandardMedCard
+                  key={m.id}
+                  m={m}
+                  isTaken={doseStatuses[m.id] === "taken"}
+                  onTake={() => take(m)}
+                />
               )
+            )}
+            {visibleMeds.length > 0 && visibleMeds.every((m) => doseStatuses[m.id] === "taken") && (
+              <div className="my-2 flex items-center gap-2.5 rounded-xl border border-success/30 bg-success-bg/30 p-3 text-success">
+                <CheckCircle2 className="h-5 w-5 shrink-0" />
+                <p className="text-xs font-bold leading-snug">All medicines for today have been taken! Keep up the wonderful progress.</p>
+              </div>
             )}
             {hasMoreMeds && (
               <Btn
@@ -379,7 +448,7 @@ export function Home() {
       {/* ── Voice / symptom reporting ── */}
       <section aria-label="Symptom reporting" className="grid place-items-center gap-3 py-2 text-center">
         <VoiceInputButton
-          onTranscript={(text) => report(text)}
+          onTranscript={(text) => handleVoice(text)}
           elderVariant={elder || voicePrimary}
           className="mx-auto"
         />

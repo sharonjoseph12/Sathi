@@ -278,12 +278,16 @@ function StandardFollowups({
   );
 }
 
+import { DoctorContacts } from "../components/DoctorContacts";
+import { Stethoscope } from "lucide-react";
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export function Followups() {
   const { pid } = useApp();
   const { isElderMode } = useAdaptiveProfile();
   const [list, setList] = useState<Followup[]>([]);
+  const [activeTab, setActiveTab] = useState<"appointments" | "doctors">("appointments");
 
   const load = () =>
     api
@@ -310,21 +314,52 @@ export function Followups() {
     load();
   };
 
-  if (isElderMode) {
-    return (
-      <ElderFollowups
-        list={list}
-        onDone={handleDone}
-        onAdd={handleAdd}
-      />
-    );
-  }
-
   return (
-    <StandardFollowups
-      list={list}
-      onDone={handleDone}
-      onAdd={handleAdd}
-    />
+    <div className="grid gap-4">
+      {/* Tab Switcher: Appointments vs Doctor Contacts */}
+      <div className="flex rounded-2xl border border-border bg-surface p-1 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setActiveTab("appointments")}
+          className={`flex-1 flex min-h-[44px] items-center justify-center gap-2 rounded-xl text-xs font-bold transition-all ${
+            activeTab === "appointments"
+              ? "bg-primary text-white shadow-elev-1"
+              : "text-ink-muted hover:text-ink hover:bg-surface-sunken"
+          }`}
+        >
+          <Calendar className="h-4 w-4" />
+          <span>Appointments</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("doctors")}
+          className={`flex-1 flex min-h-[44px] items-center justify-center gap-2 rounded-xl text-xs font-bold transition-all ${
+            activeTab === "doctors"
+              ? "bg-primary text-white shadow-elev-1"
+              : "text-ink-muted hover:text-ink hover:bg-surface-sunken"
+          }`}
+        >
+          <Stethoscope className="h-4 w-4" />
+          <span>Doctor Contacts</span>
+        </button>
+      </div>
+
+      {activeTab === "doctors" ? (
+        <DoctorContacts />
+      ) : isElderMode ? (
+        <ElderFollowups
+          list={list}
+          onDone={handleDone}
+          onAdd={handleAdd}
+        />
+      ) : (
+        <StandardFollowups
+          list={list}
+          onDone={handleDone}
+          onAdd={handleAdd}
+        />
+      )}
+    </div>
   );
 }

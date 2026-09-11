@@ -13,6 +13,7 @@ import { AppProvider, go, useApp, useHash } from "./lib/store";
 import { OfflineBanner, SonnerToaster } from "./components/ui";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { ProfileSwitcher } from "./components/ProfileSwitcher";
+import { GlobalVoiceOverlay } from "./components/GlobalVoiceOverlay";
 import {
   Home as HomeIcon,
   Pill,
@@ -63,6 +64,7 @@ import {
   Plans,
   Report,
 } from "./screens/more";
+import { DoctorContacts } from "./components/DoctorContacts";
 import { t } from "./lib/i18n";
 import { checkDueDoses } from "./lib/notify";
 import {
@@ -292,7 +294,7 @@ function Shell() {
   useEffect(() => {
     const cls = getAdaptiveClasses(profile);
     const el = document.documentElement;
-    el.classList.remove("elder", "reduced-motion");
+    el.classList.remove("elder", "reduced-motion", "large-text", "high-contrast");
     cls.forEach((c) => el.classList.add(c));
   }, [profile]);
 
@@ -358,6 +360,7 @@ function Shell() {
     "#/demo": <Demo />,
     "#/more": <More />,
     "#/sos": <SOS />,
+    "#/doctors": <DoctorContacts />,
   };
   if (path === "#/care" && arg) screens["#/care"] = <PatientDetail id={Number(arg)} />;
   if (path === "#/plan" && arg) screens["#/plan"] = <CreatePlan id={Number(arg)} />;
@@ -443,6 +446,9 @@ function Shell() {
               <AlertOctagon className="h-5 w-5" />
             </button>
           )}
+
+          {/* Global Voice Assistant Trigger */}
+          <GlobalVoiceOverlay />
 
           {/* Adaptive Profile Switcher (Judge / Persona Switcher) */}
           <ProfileSwitcher />

@@ -74,13 +74,16 @@ function PanicButton({ onSent }: { onSent: (n: number) => void }) {
   };
 
   const fire = async () => {
+    const caregiverPhone = localStorage.getItem("@sathi_caregiver_phone") || "+91 98765 43210";
     try {
       const r = await api.sosAlert(pid, "Panic-button SOS from app");
-      setMsg(`Alert sent to ${r.notified} care-team member(s). Now call 112 below.`);
+      setMsg(`Alert sent to care team. Initiating phone call to caregiver at ${caregiverPhone}...`);
       onSent(r.notified);
     } catch {
-      setMsg("Couldn't reach server — call 112 directly now.");
+      setMsg(`Initiating phone call to caregiver at ${caregiverPhone}...`);
     }
+    // Launch native phone dialer immediately to call caregiver
+    window.location.href = `tel:${caregiverPhone.replace(/\s+/g, "")}`;
   };
 
   // Elder variant
@@ -92,19 +95,19 @@ function PanicButton({ onSent }: { onSent: (n: number) => void }) {
           <span>Emergency SOS</span>
         </p>
         <p className="mt-1 text-base text-ink font-medium">
-          Tap the button below to alert your care team.
+          Tap the button below to alert your care team and call your caregiver.
         </p>
         <button
           onClick={tap}
           aria-label={count !== null ? `Sending SOS in ${count} seconds` : "Tap to send emergency SOS alert"}
           aria-describedby="sos-title"
           className={`mt-4 w-full flex items-center justify-center gap-2 rounded-2xl py-6 text-xl font-extrabold text-white active:scale-[0.98] transition-transform ${
-            count !== null ? "bg-danger animate-pulse" : "bg-danger hover:brightness-110"
+            count !== null ? "bg-danger animate-pulse" : "bg-danger hover:brightness-110 shadow-elev-2"
           }`}
           style={{ minHeight: 72 }}
         >
           <ShieldAlert className="h-6 w-6" aria-hidden="true" />
-          <span>{count !== null ? `SENDING IN ${count}…` : "SEND SOS"}</span>
+          <span>{count !== null ? `CALLING IN ${count}…` : "TAP FOR EMERGENCY SOS"}</span>
         </button>
         {count !== null && (
           <Btn
@@ -137,7 +140,7 @@ function PanicButton({ onSent }: { onSent: (n: number) => void }) {
         <span>Emergency SOS</span>
       </p>
       <p className="text-xs text-ink-muted mt-1">
-        Tap 5 times fast to alert your care team. Then call emergency services below.
+        Tap 5 times fast to trigger emergency SOS and immediately call your caregiver.
       </p>
       <button
         onClick={tap}
@@ -150,14 +153,14 @@ function PanicButton({ onSent }: { onSent: (n: number) => void }) {
         }
         aria-describedby="sos-title-std"
         className={`mt-3 w-full flex items-center justify-center gap-2 rounded-2xl py-4 text-base font-extrabold text-white active:scale-[0.99] transition-transform ${
-          count !== null ? "bg-danger animate-pulse" : "bg-danger hover:brightness-105"
+          count !== null ? "bg-danger animate-pulse" : "bg-danger hover:brightness-105 shadow-elev-1"
         }`}
         style={{ minHeight: 52 }}
       >
         <ShieldAlert className="h-5 w-5" aria-hidden="true" />
         <span>
           {count !== null
-            ? `SENDING IN ${count}…`
+            ? `CALLING IN ${count}…`
             : taps > 0
             ? `Keep tapping! (${taps}/5)`
             : "TAP 5× FOR SOS"}
@@ -185,74 +188,130 @@ function PanicButton({ onSent }: { onSent: (n: number) => void }) {
    Dial Buttons — one-tap emergency contacts with full ARIA labels
    ────────────────────────────────────────────────────────────────── */
 function DialButtons() {
-  const { pid } = useApp();
   const profile = useAdaptiveProfile();
   const isElderMode = getVariant(profile) === "elder";
-  const [contact, setContact] = useState("");
+  const [caregiverPhone, setCaregiverPhone] = useState(() => {
+    return localStorage.getItem("@sathi_caregiver_phone") || "+91 98765 43210";
+  });
+  const [isEditingPhone, setIsEditingPhone] = useState(false);
 
-  useEffect(() => {
-    if (pid)
-      api
-        .emergencyCard(pid)
-        .then((c) => setContact(c.emergency_contact || ""))
-        .catch(() => {});
-  }, [pid]);
+  const saveCaregiverPhone = (newPhone: string) => {
+    setCaregiverPhone(newPhone);
+    localStorage.setItem("@sathi_caregiver_phone", newPhone);
+  };
 
-  const smsBody = encodeURIComponent("SOS: I need help. This is my emergency alert from Sathi.");
+  const smsBody = encodeURIComponent("EMERGENCY SOS: I need immediate help. Please call me back right now.");
   const btnBase = isElderMode
-    ? "flex items-center justify-center gap-2 rounded-2xl p-4 text-center text-base font-extrabold transition active:scale-[0.99]"
-    : "flex items-center justify-center gap-2 rounded-2xl p-3 text-center text-sm font-extrabold transition active:scale-[0.99]";
+    ? "flex items-center justify-center gap-2 rounded-2xl p-4 text-center text-base font-extrabold transition active:scale-[0.99] shadow-elev-1"
+    : "flex items-center justify-center gap-2 rounded-2xl p-3 text-center text-sm font-extrabold transition active:scale-[0.99] shadow-elev-1";
 
   return (
-    <Card>
-      <p className={`flex items-center gap-2 mb-3 font-bold text-ink ${isElderMode ? "text-lg" : "text-base"}`}>
-        <Phone className="h-5 w-5 text-primary" aria-hidden="true" />
-        <span>One-tap help</span>
-      </p>
-      <div className={`grid gap-2.5 ${isElderMode ? "grid-cols-1" : "grid-cols-2"}`}>
-        <a
-          href="tel:112"
-          aria-label="Call emergency services at 112"
-          className={`${btnBase} bg-danger text-white hover:brightness-105`}
-          style={{ minHeight: isElderMode ? 56 : 44 }}
-        >
-          <PhoneCall className="h-5 w-5" aria-hidden="true" />
-          <span>{isElderMode ? "Call 112 — Emergency" : "Call 112"}</span>
-        </a>
-        <a
-          href="tel:108"
-          aria-label="Call ambulance at 108"
-          className={`${btnBase} bg-primary text-white hover:brightness-105`}
-          style={{ minHeight: isElderMode ? 56 : 44 }}
-        >
-          <Activity className="h-5 w-5" aria-hidden="true" />
-          <span>{isElderMode ? "Call Ambulance — 108" : "Ambulance 108"}</span>
-        </a>
-        {contact && (
+    <div className="grid gap-3">
+      {/* Caregiver Emergency Phone Setup Card */}
+      <Card className="border border-primary/30 bg-primary-soft/30">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary">
+            <Phone className="h-4 w-4" />
+            <span>Caregiver Emergency Number</span>
+          </p>
+          <button
+            type="button"
+            onClick={() => setIsEditingPhone((v) => !v)}
+            className="text-xs font-semibold text-primary underline"
+          >
+            {isEditingPhone ? "Done" : "Change Number"}
+          </button>
+        </div>
+
+        {isEditingPhone ? (
+          <div className="flex items-center gap-2">
+            <input
+              type="tel"
+              value={caregiverPhone}
+              onChange={(e) => saveCaregiverPhone(e.target.value)}
+              placeholder="e.g. +91 98765 43210"
+              className="flex-1 min-h-[44px] rounded-xl border border-border bg-surface px-3 py-1.5 text-sm font-bold text-ink"
+            />
+            <button
+              type="button"
+              onClick={() => setIsEditingPhone(false)}
+              className="min-h-[44px] rounded-xl bg-primary px-4 text-xs font-bold text-white shadow-elev-1"
+            >
+              Save
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-extrabold text-ink">{caregiverPhone}</p>
+            <p className="text-xs text-ink-muted">Dials automatically when SOS is pressed</p>
+          </div>
+        )}
+      </Card>
+
+      {/* Emergency Dialer Actions */}
+      <Card>
+        <p className={`flex items-center gap-2 mb-3 font-bold text-ink ${isElderMode ? "text-lg" : "text-base"}`}>
+          <Phone className="h-5 w-5 text-primary" aria-hidden="true" />
+          <span>Direct Emergency Dialers</span>
+        </p>
+        <div className={`grid gap-2.5 ${isElderMode ? "grid-cols-1" : "grid-cols-2"}`}>
+          {/* Primary Caregiver Call Button */}
           <a
-            href={`tel:${encodeURIComponent(contact)}`}
-            aria-label={`Call your emergency contact at ${contact}`}
-            className={`${btnBase} bg-primary-soft text-primary hover:bg-primary/20`}
-            style={{ minHeight: isElderMode ? 56 : 44 }}
+            href={`tel:${caregiverPhone.replace(/\s+/g, "")}`}
+            aria-label={`Call Caregiver now at ${caregiverPhone}`}
+            className={`${btnBase} bg-danger text-white hover:brightness-105`}
+            style={{ minHeight: isElderMode ? 56 : 48 }}
+          >
+            <PhoneCall className="h-5 w-5" aria-hidden="true" />
+            <span>Call Caregiver ({caregiverPhone})</span>
+          </a>
+
+          {/* Doctor Call Button */}
+          <a
+            href="tel:+919820012345"
+            aria-label="Call Doctor Dr. Rajesh Sharma"
+            className={`${btnBase} bg-primary text-white hover:brightness-105`}
+            style={{ minHeight: isElderMode ? 56 : 48 }}
           >
             <Phone className="h-5 w-5" aria-hidden="true" />
-            <span>{isElderMode ? `Call ${contact}` : `Contact: ${contact}`}</span>
+            <span>Call Doctor (Dr. Sharma)</span>
           </a>
-        )}
-        <a
-          href={`sms:?body=${smsBody}`}
-          aria-label="Share SOS message via SMS"
-          className={`${btnBase} bg-primary-soft text-primary hover:bg-primary/20`}
-          style={{ minHeight: isElderMode ? 56 : 44 }}
-        >
-          <MessageSquare className="h-5 w-5" aria-hidden="true" />
-          <span>{isElderMode ? "Send SOS Message" : "Share SOS via SMS"}</span>
-        </a>
-      </div>
-      <p className={`mt-3 text-ink-muted ${isElderMode ? "text-sm" : "text-[11px]"}`}>
-        Sathi never auto-dials or dispatches — you stay in control; the care team is alerted in parallel.
-      </p>
-    </Card>
+
+          {/* Emergency 112 */}
+          <a
+            href="tel:112"
+            aria-label="Call emergency services at 112"
+            className={`${btnBase} border border-danger/30 bg-danger-bg text-danger hover:bg-danger/20`}
+            style={{ minHeight: isElderMode ? 56 : 44 }}
+          >
+            <PhoneCall className="h-5 w-5" aria-hidden="true" />
+            <span>Call 112 (Emergency)</span>
+          </a>
+
+          {/* Ambulance 108 */}
+          <a
+            href="tel:108"
+            aria-label="Call ambulance at 108"
+            className={`${btnBase} border border-border bg-surface text-ink hover:bg-surface-sunken`}
+            style={{ minHeight: isElderMode ? 56 : 44 }}
+          >
+            <Activity className="h-5 w-5 text-primary" aria-hidden="true" />
+            <span>Ambulance (108)</span>
+          </a>
+
+          {/* SMS Alert */}
+          <a
+            href={`sms:${caregiverPhone.replace(/\s+/g, "")}?body=${smsBody}`}
+            aria-label="Share emergency SOS SMS"
+            className={`${btnBase} col-span-full border border-border bg-surface text-ink hover:bg-surface-sunken`}
+            style={{ minHeight: isElderMode ? 56 : 44 }}
+          >
+            <MessageSquare className="h-5 w-5 text-primary" aria-hidden="true" />
+            <span>Send SOS SMS to Caregiver</span>
+          </a>
+        </div>
+      </Card>
+    </div>
   );
 }
 

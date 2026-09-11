@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { api, type Med } from "../lib/api";
 import { go, useApp } from "../lib/store";
-import { Badge, Btn, Card, Empty, Input, Page, Toggle } from "../components/ui";
+import { Badge, Btn, Card, Empty, Input, Page, Toggle, Confetti } from "../components/ui";
 import { useAdaptiveProfile, isElder } from "../lib/useAdaptiveProfile";
+import { toast } from "sonner";
+import { speakSmart } from "../lib/voice";
 import {
   Check,
   Plus,
@@ -12,47 +14,72 @@ import {
   ShieldCheck,
   ChevronDown,
   ChevronUp,
+  AlertCircle,
+  BellRing,
 } from "lucide-react";
 
-// ── Elder MedRow: simplified, progressive disclosure ─────────────────
-function ElderMedRow({ m, pid, onDone }: { m: Med; pid: number; onDone: () => void }) {
-  const [showMore, setShowMore] = useState(false);
-  const [msg, setMsg] = useState("");
+type DoseStatus = "taken" | "snoozed" | "missed" | "pending";
 
-  const act = async (status: string) => {
-    try {
-      await api.logDose(pid, m.id, { status });
-      onDone();
-    } catch {
-      setMsg("Saved — will sync when online");
-    }
-  };
+// ── Elder MedRow: simplified, progressive disclosure ─────────────────
+function ElderMedRow({
+  m,
+  status = "pending",
+  onAct,
+  onRemove,
+}: {
+  m: Med;
+  status: DoseStatus;
+  onAct: (m: Med, s: DoseStatus) => void;
+  onRemove: (m: Med) => void;
+}) {
+  const [showMore, setShowMore] = useState(false);
+  const isTaken = status === "taken";
 
   return (
-    <Card className="border-2 border-primary/20 bg-surface shadow-sm">
-      <div>
-        <p className="text-xl font-bold leading-tight text-ink">{m.name}</p>
-        <p className="mt-1 flex items-center gap-1.5 text-base text-ink-muted">
-          <Clock className="h-4 w-4" aria-hidden="true" />
-          {m.time} · {m.dose}
-        </p>
-        {m.simplified && (
-          <div className="mt-2.5 flex items-start gap-2 rounded-xl bg-primary-soft p-3 text-ink">
-            <Sparkles className="h-5 w-5 shrink-0 text-primary mt-0.5" aria-hidden="true" />
-            <p className="text-base leading-relaxed font-medium">{m.simplified}</p>
-          </div>
+    <Card className={`border-2 transition-all ${isTaken ? "border-success bg-success-bg/30" : "border-primary/20 bg-surface shadow-sm"}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-xl font-bold leading-tight text-ink">{m.name}</p>
+          <p className="mt-1 flex items-center gap-1.5 text-base text-ink-muted">
+            <Clock className="h-4 w-4" aria-hidden="true" />
+            {m.time} · {m.dose}
+          </p>
+          {m.simplified && (
+            <div className="mt-2.5 flex items-start gap-2 rounded-xl bg-primary-soft p-3 text-ink">
+              <Sparkles className="h-5 w-5 shrink-0 text-primary mt-0.5" aria-hidden="true" />
+              <p className="text-base leading-relaxed font-medium">{m.simplified}</p>
+            </div>
+          )}
+        </div>
+        {isTaken && (
+          <span className="flex items-center gap-1 rounded-full bg-success px-3 py-1 text-xs font-bold text-white shadow-sm">
+            <Check className="h-3.5 w-3.5 stroke-[3]" />
+            Taken
+          </span>
+        )}
+        {status === "snoozed" && (
+          <span className="flex items-center gap-1 rounded-full bg-warning-bg border border-warning/40 px-2.5 py-1 text-xs font-bold text-warning">
+            <BellRing className="h-3.5 w-3.5" />
+            Snoozed
+          </span>
+        )}
+        {status === "missed" && (
+          <span className="flex items-center gap-1 rounded-full bg-danger-bg border border-danger/40 px-2.5 py-1 text-xs font-bold text-danger">
+            <AlertCircle className="h-3.5 w-3.5" />
+            Missed
+          </span>
         )}
       </div>
 
       {/* Primary action: always visible */}
       <div className="mt-4">
         <Btn
-          kind="success"
-          onClick={() => act("taken")}
+          kind={isTaken ? "ghost" : "success"}
+          onClick={() => onAct(m, isTaken ? "pending" : "taken")}
           className="!w-full !min-h-[56px] !text-lg !font-bold flex items-center justify-center gap-2"
         >
           <Check className="h-5 w-5 stroke-[3]" aria-hidden="true" />
-          Take this medicine
+          {isTaken ? "Taken today (Tap to undo)" : "Take this medicine"}
         </Btn>
       </div>
 
@@ -73,27 +100,24 @@ function ElderMedRow({ m, pid, onDone }: { m: Med; pid: number; onDone: () => vo
       </button>
 
       {showMore && (
-        <div className="mt-2 grid gap-2">
+        <div className="mt-2 grid gap-2 animate-in fade-in duration-150">
           <Btn
             kind="ghost"
-            onClick={() => act("snoozed")}
+            onClick={() => onAct(m, "snoozed")}
             className="!min-h-[48px] !text-base"
           >
-            Remind me later
+            Remind me in 30 mins
           </Btn>
           <Btn
             kind="ghost"
-            onClick={() => act("missed")}
-            className="!min-h-[48px] !text-base"
+            onClick={() => onAct(m, "missed")}
+            className="!min-h-[48px] !text-base text-warning"
           >
-            I missed this one
+            I missed this dose
           </Btn>
           <button
             className="flex items-center justify-center gap-1.5 min-h-[44px] text-sm text-danger font-semibold hover:underline"
-            onClick={async () => {
-              await api.delMed(pid, m.id);
-              onDone();
-            }}
+            onClick={() => onRemove(m)}
             aria-label={`Remove ${m.name} from your medicine list`}
           >
             <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -101,31 +125,51 @@ function ElderMedRow({ m, pid, onDone }: { m: Med; pid: number; onDone: () => vo
           </button>
         </div>
       )}
-      {msg && <p className="mt-2 text-sm text-ink-muted">{msg}</p>}
     </Card>
   );
 }
 
 // ── Standard MedRow: dense layout with jargon toggle ─────────────────
-function StandardMedRow({ m, pid, onDone }: { m: Med; pid: number; onDone: () => void }) {
+function StandardMedRow({
+  m,
+  status = "pending",
+  onAct,
+  onRemove,
+}: {
+  m: Med;
+  status: DoseStatus;
+  onAct: (m: Med, s: DoseStatus) => void;
+  onRemove: (m: Med) => void;
+}) {
   const [plain, setPlain] = useState(true);
-  const [msg, setMsg] = useState("");
-
-  const act = async (status: string) => {
-    try {
-      await api.logDose(pid, m.id, { status });
-      onDone();
-    } catch {
-      setMsg("Saved offline — will sync");
-    }
-  };
+  const isTaken = status === "taken";
 
   return (
-    <Card className="border border-border bg-surface transition hover:shadow-sm">
+    <Card className={`border transition hover:shadow-sm ${isTaken ? "border-success/40 bg-success-bg/10" : "border-border bg-surface"}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="font-bold text-ink">{m.name}</p>
-          <p className="text-xs text-ink-muted">{m.time} · {m.dose} · {m.frequency}</p>
+          <div className="flex items-center gap-2">
+            <p className="font-bold text-ink text-base">{m.name}</p>
+            {isTaken && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-bold text-success">
+                <Check className="h-3 w-3 stroke-[3]" />
+                Taken today
+              </span>
+            )}
+            {status === "snoozed" && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-bold text-warning">
+                <Clock className="h-3 w-3" />
+                Snoozed
+              </span>
+            )}
+            {status === "missed" && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-danger/15 px-2 py-0.5 text-[11px] font-bold text-danger">
+                <AlertCircle className="h-3 w-3" />
+                Missed
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-ink-muted mt-0.5">{m.time} · {m.dose} · {m.frequency || "Daily"}</p>
           {m.simplified ? (
             <div className="mt-1.5 flex items-start gap-1.5 text-xs text-ink">
               <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary mt-0.5" aria-hidden="true" />
@@ -144,30 +188,38 @@ function StandardMedRow({ m, pid, onDone }: { m: Med; pid: number; onDone: () =>
         </div>
       )}
 
-      <div className="mt-3 flex items-center gap-2">
-        <Btn kind="success" onClick={() => act("taken")} className="flex items-center gap-1">
+      <div className="mt-3 flex items-center gap-2 flex-wrap">
+        <Btn
+          kind={isTaken ? "ghost" : "success"}
+          onClick={() => onAct(m, isTaken ? "pending" : "taken")}
+          className="flex items-center gap-1 font-semibold"
+        >
           <Check className="h-4 w-4" aria-hidden="true" />
-          Take
+          {isTaken ? "Taken (Undo)" : "Take"}
         </Btn>
-        <Btn kind="ghost" onClick={() => act("snoozed")}>
+        <Btn
+          kind="ghost"
+          onClick={() => onAct(m, "snoozed")}
+          className={status === "snoozed" ? "border border-warning text-warning" : ""}
+        >
           Snooze
         </Btn>
-        <Btn kind="ghost" onClick={() => act("missed")}>
+        <Btn
+          kind="ghost"
+          onClick={() => onAct(m, "missed")}
+          className={status === "missed" ? "border border-danger text-danger" : ""}
+        >
           Missed
         </Btn>
         <button
-          className="ml-auto flex items-center gap-1 text-xs text-danger min-h-[44px] px-2 font-medium hover:underline"
-          onClick={async () => {
-            await api.delMed(pid, m.id);
-            onDone();
-          }}
+          className="ml-auto flex items-center gap-1 text-xs text-danger min-h-[44px] px-2 font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger rounded-lg"
+          onClick={() => onRemove(m)}
           aria-label={`Remove ${m.name}`}
         >
           <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
           Remove
         </button>
       </div>
-      {msg && <p className="mt-1 text-xs text-ink-muted">{msg}</p>}
     </Card>
   );
 }
@@ -179,6 +231,9 @@ export function Medicines() {
   const elder = isElder(profile);
 
   const [meds, setMeds] = useState<Med[]>([]);
+  const [doseStatuses, setDoseStatuses] = useState<Record<number, DoseStatus>>({});
+  const [burst, setBurst] = useState(0);
+
   const [form, setForm] = useState({
     name: "",
     dose: "",
@@ -190,20 +245,93 @@ export function Medicines() {
   const [msg, setMsg] = useState("");
   const [showAdd, setShowAdd] = useState(!elder);
 
-  const load = () =>
-    api
-      .meds(pid)
-      .then(setMeds)
-      .catch(() => {});
+  const load = async () => {
+    if (!pid) return;
+    try {
+      const [mList, dList] = await Promise.all([
+        api.meds(pid),
+        api.dosesToday(pid).catch(() => []),
+      ]);
+      setMeds(mList);
+      const map: Record<number, DoseStatus> = {};
+      dList.forEach((d) => {
+        map[d.medication_id] = (d.status as DoseStatus) || "pending";
+      });
+      setDoseStatuses(map);
+    } catch {
+      /* offline */
+    }
+  };
 
   useEffect(() => {
     if (pid) load();
   }, [pid]);
 
+  const handleAct = async (m: Med, s: DoseStatus) => {
+    // Optimistic status update
+    setDoseStatuses((prev) => ({ ...prev, [m.id]: s }));
+
+    if (s === "taken") {
+      setBurst((b) => b + 1);
+      toast.success(`${m.name} marked as taken!`);
+      void speakSmart(`${m.name} marked as taken. Great job!`);
+      try {
+        await api.confirm(pid, m.id);
+      } catch {
+        /* offline */
+      }
+    } else if (s === "snoozed") {
+      toast.info(`${m.name} snoozed for 30 minutes.`);
+      try {
+        await api.logDose(pid, m.id, { status: "snoozed" });
+      } catch {
+        /* offline */
+      }
+    } else if (s === "missed") {
+      toast.warning(`${m.name} recorded as missed. Caregiver notified.`);
+      try {
+        await api.logDose(pid, m.id, { status: "missed" });
+      } catch {
+        /* offline */
+      }
+    } else if (s === "pending") {
+      toast.info(`${m.name} reset to pending.`);
+      try {
+        await api.logDose(pid, m.id, { status: "pending" });
+      } catch {
+        /* offline */
+      }
+    }
+  };
+
+  const handleRemove = async (m: Med) => {
+    setMeds((prev) => prev.filter((x) => x.id !== m.id));
+    toast.success(`${m.name} removed from medications.`);
+    try {
+      await api.delMed(pid, m.id);
+    } catch {
+      /* offline */
+    }
+  };
+
   const add = async () => {
-    if (!form.name) return;
+    if (!form.name.trim()) {
+      toast.error("Please enter a medicine name.");
+      return;
+    }
     try {
       const r = await api.addMed(pid, form);
+      const newMed: Med = {
+        id: r.id || Date.now(),
+        name: form.name,
+        dose: form.dose || "1 dose",
+        time: form.time,
+        frequency: form.frequency,
+        instructions: form.instructions,
+        simplified: r.simplified || form.instructions,
+      };
+      setMeds((prev) => [newMed, ...prev]);
+      toast.success(`${form.name} added to medicines!`);
       setMsg(
         r.expanded
           ? `Auto-mapped to ${r.expanded.map(([, t]) => t).join(" · ")}`
@@ -221,7 +349,9 @@ export function Medicines() {
       });
       load();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "failed");
+      const em = e instanceof Error ? e.message : "failed to add medicine";
+      setMsg(em);
+      toast.error(em);
     }
   };
 
@@ -241,9 +371,10 @@ export function Medicines() {
 
   return (
     <div className="grid gap-3">
+      <Confetti fire={burst} />
       <Page
         title="Medicines"
-        sub={elder ? "Your current medicines" : "Take · snooze · add"}
+        sub={elder ? "Your current medicines" : "Take · snooze · track"}
         right={
           <Btn
             kind="ghost"
@@ -260,9 +391,21 @@ export function Medicines() {
       <div role="list" aria-label="Medicines list" className="grid gap-3">
         {meds.map((m) =>
           elder ? (
-            <ElderMedRow key={m.id} m={m} pid={pid} onDone={load} />
+            <ElderMedRow
+              key={m.id}
+              m={m}
+              status={doseStatuses[m.id] || "pending"}
+              onAct={handleAct}
+              onRemove={handleRemove}
+            />
           ) : (
-            <StandardMedRow key={m.id} m={m} pid={pid} onDone={load} />
+            <StandardMedRow
+              key={m.id}
+              m={m}
+              status={doseStatuses[m.id] || "pending"}
+              onAct={handleAct}
+              onRemove={handleRemove}
+            />
           )
         )}
       </div>

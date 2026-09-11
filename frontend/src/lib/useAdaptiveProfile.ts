@@ -27,6 +27,7 @@ export type AdaptiveProfileRaw = {
   digitalLiteracy: DigitalLiteracy;
   urgencyLevel: UrgencyLevel;
   accessibilityFlags: AccessibilityFlag[];
+  roleOverride?: Role;
 };
 
 export type Density = "elder" | "standard" | "caregiver";
@@ -75,6 +76,7 @@ export function loadAdaptiveProfileRaw(): AdaptiveProfileRaw {
         urgencyLevel: parsed.urgencyLevel ?? DEFAULT_RAW.urgencyLevel,
         accessibilityFlags:
           parsed.accessibilityFlags ?? DEFAULT_RAW.accessibilityFlags,
+        roleOverride: parsed.roleOverride,
       };
     }
   } catch {
@@ -93,12 +95,13 @@ export function saveAdaptiveProfileRaw(raw: AdaptiveProfileRaw): void {
 
 // ── Derivation: raw fields → full AdaptiveProfile ────────────────────
 
-function derive(raw: AdaptiveProfileRaw, role: Role): AdaptiveProfile {
+function derive(raw: AdaptiveProfileRaw, baseRole: Role): AdaptiveProfile {
+  const role = raw.roleOverride || baseRole;
   const isElder = raw.ageBand === "elder";
   const isCaregiver = role === "caregiver";
   const isGuardian = role === "guardian" || raw.ageBand === "guardian";
   const isLowLiteracy = raw.digitalLiteracy === "low";
-  const flags = new Set(raw.accessibilityFlags);
+  const flags = new Set(raw.accessibilityFlags || []);
 
   // Elder users get large text and high contrast by default, even if not explicitly flagged
   const prefersLargeText = flags.has("large_text") || isElder;
@@ -136,13 +139,12 @@ function derive(raw: AdaptiveProfileRaw, role: Role): AdaptiveProfile {
 // ── The hook ─────────────────────────────────────────────────────────
 
 export function useAdaptiveProfile(): AdaptiveProfile {
-  const { me } = useApp();
+  const { me, adaptiveRaw } = useApp();
   const role = (me?.role ?? "patient") as Role;
 
   return useMemo(() => {
-    const raw = loadAdaptiveProfileRaw();
-    return derive(raw, role);
-  }, [role]);
+    return derive(adaptiveRaw || loadAdaptiveProfileRaw(), role);
+  }, [adaptiveRaw, role]);
 }
 
 // ── CSS class helper: apply to <html> or a container ─────────────────
@@ -150,7 +152,9 @@ export function useAdaptiveProfile(): AdaptiveProfile {
 
 export function getAdaptiveClasses(profile: AdaptiveProfile): string[] {
   const cls: string[] = [];
-  if (profile.isElder || profile.prefersHighContrast) cls.push("elder");
+  if (profile.isElder) cls.push("elder");
+  if (profile.prefersHighContrast) cls.push("high-contrast");
+  if (profile.prefersLargeText) cls.push("large-text");
   if (profile.prefersReducedMotion) cls.push("reduced-motion");
   return cls;
 }

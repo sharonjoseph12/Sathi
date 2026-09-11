@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { go, useApp } from "../lib/store";
 import { Btn, Card, Input } from "../components/ui";
 import { Icon } from "../components/icons";
@@ -32,6 +32,16 @@ export function Login() {
   const [pw, setPw] = useState("demo1234");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (window.location.hash.includes("role=caregiver")) {
+      setEmail("priya@sathi.demo");
+      setPw("demo1234");
+      login("priya@sathi.demo", "demo1234", true).then((e) => {
+        if (!e) go("#/care");
+      });
+    }
+  }, []);
 
   const submit = async () => {
     setBusy(true);
@@ -98,7 +108,56 @@ export function Login() {
           <Btn onClick={submit} disabled={busy} className={elder ? "!min-h-[56px] !text-lg" : ""}>
             {busy ? "Logging in…" : "Log in"}
           </Btn>
-          <div className={`flex items-center justify-between ${elder ? "text-base gap-4" : "text-[13px]"}`}>
+          <div className="mt-2 border-t border-border pt-3">
+            <p className="mb-2 text-xs font-semibold text-muted-fg uppercase tracking-wider">Quick Demo Logins (Dual-Tab Ready)</p>
+            <div className="grid gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  setBusy(true);
+                  setEmail("meena@sathi.demo");
+                  setPw("demo1234");
+                  const e = await login("meena@sathi.demo", "demo1234", true);
+                  setBusy(false);
+                  if (!e) go("#/home");
+                }}
+                className="flex min-h-[44px] items-center justify-between rounded-xl border border-border bg-surface px-3 py-2 text-xs font-semibold text-ink shadow-sm hover:bg-surface-sunken transition-all text-left"
+              >
+                <span>Patient Account (Meena)</span>
+                <span className="rounded-md bg-primary-soft px-2 py-0.5 text-[11px] font-bold text-primary">Patient</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  setBusy(true);
+                  setEmail("priya@sathi.demo");
+                  setPw("demo1234");
+                  const e = await login("priya@sathi.demo", "demo1234", true);
+                  setBusy(false);
+                  if (!e) go("#/care");
+                }}
+                className="flex min-h-[44px] items-center justify-between rounded-xl border border-border bg-surface px-3 py-2 text-xs font-semibold text-ink shadow-sm hover:bg-surface-sunken transition-all text-left"
+              >
+                <span>Caregiver Account (Priya)</span>
+                <span className="rounded-md bg-success-bg px-2 py-0.5 text-[11px] font-bold text-success">Caregiver</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const url = new URL(window.location.href);
+                  url.hash = "#/login?role=caregiver";
+                  window.open(url.toString(), "_blank");
+                }}
+                className="flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/40 bg-primary-soft/40 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary-soft transition-all"
+              >
+                <span>Open Caregiver in New Tab (Split View)</span>
+              </button>
+            </div>
+          </div>
+
+          <div className={`flex items-center justify-between mt-1 ${elder ? "text-base gap-4" : "text-[13px]"}`}>
             <button
               className={`font-semibold text-primary min-h-[44px] ${elder ? "text-base" : ""}`}
               onClick={() => go("#/register")}

@@ -10,9 +10,27 @@ const TKEY = "@sathi_token";
 const QKEY = "@sathi_offline_queue";
 
 export const tok = {
-  get: () => localStorage.getItem(TKEY) || "",
-  set: (t: string) => localStorage.setItem(TKEY, t),
-  clear: () => localStorage.removeItem(TKEY),
+  get: () => {
+    try {
+      return sessionStorage.getItem(TKEY) || localStorage.getItem(TKEY) || "";
+    } catch {
+      return "";
+    }
+  },
+  set: (t: string, sessionOnly = false) => {
+    try {
+      sessionStorage.setItem(TKEY, t);
+      if (!sessionOnly) {
+        localStorage.setItem(TKEY, t);
+      }
+    } catch { /* ignore */ }
+  },
+  clear: () => {
+    try {
+      sessionStorage.removeItem(TKEY);
+      localStorage.removeItem(TKEY);
+    } catch { /* ignore */ }
+  },
 };
 const queue = {
   load(): string[] { try { return JSON.parse(localStorage.getItem(QKEY) || "[]"); } catch { return []; } },

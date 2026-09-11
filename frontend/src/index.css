@@ -114,6 +114,31 @@
   min-height: 56px;
 }
 
+/* Large text mode override */
+.large-text body,
+.large-text main {
+  font-size: 1.25rem !important;
+}
+
+/* High contrast (AAA) mode override */
+.high-contrast {
+  --border: #52525b !important;
+  --ink: #000000 !important;
+  --ink-muted: #18181b !important;
+  --bg: #ffffff !important;
+  --surface: #ffffff !important;
+  --primary: #3730a3 !important;
+}
+
+.dark.high-contrast {
+  --border: #a1a1aa !important;
+  --ink: #ffffff !important;
+  --ink-muted: #f4f4f5 !important;
+  --bg: #000000 !important;
+  --surface: #09090b !important;
+  --primary: #c7d2fe !important;
+}
+
 /* Base Body Styles */
 body {
   background-color: var(--bg);
