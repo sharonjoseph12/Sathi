@@ -5,7 +5,7 @@ import { LANGS } from "../lib/i18n";
 import { useApp } from "../lib/store";
 import { Badge, Btn, Card, Empty, Input, Area, Page, Toggle } from "../components/ui";
 import { askPermission } from "../lib/notify";
-import { useAdaptiveProfile, getVariant, isElder } from "../lib/useAdaptiveProfile";
+import { useAdaptiveProfile, isElder } from "../lib/useAdaptiveProfile";
 
 /* ══════════════════════════════════════════════════════════════════
    Settings — Language, theme, patient linking, access controls

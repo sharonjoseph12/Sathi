@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { api } from "../lib/api";
 import { go, useApp } from "../lib/store";
 import { Btn, Card, Input } from "../components/ui";
 import { Icon } from "../components/icons";

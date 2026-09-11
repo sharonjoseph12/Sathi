@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { go, useApp } from "../lib/store";
 import { useAdaptiveProfile } from "../lib/useAdaptiveProfile";
-import { Btn, Card, Empty, Page } from "../components/ui";
+import { Card, Empty, Page } from "../components/ui";
 
 // ─── Shared dose card (elder large-touch variant) ────────────────────────────
 

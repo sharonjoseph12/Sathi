@@ -6,16 +6,19 @@
  * calls `cb` with the transcript, then stops.
  */
 export function listenOnce(cb: (text: string) => void, setListening: (b: boolean) => void) {
-  const SR = (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognition }).webkitSpeechRecognition
-    || (window as unknown as { SpeechRecognition?: new () => SpeechRecognition }).SpeechRecognition;
+  const W = window as unknown as {
+    SpeechRecognition?: new () => any;
+    webkitSpeechRecognition?: new () => any;
+  };
+  const SR = W.webkitSpeechRecognition || W.SpeechRecognition;
   if (!SR) return;
   const rec = new SR();
   rec.lang = navigator.language || "en-IN";
   rec.interimResults = false;
   rec.maxAlternatives = 1;
   setListening(true);
-  rec.onresult = (e: SpeechRecognitionEvent) => {
-    const text = e.results[0]?.[0]?.transcript || "";
+  rec.onresult = (e: any) => {
+    const text = e.results?.[0]?.[0]?.transcript || "";
     cb(text);
     setListening(false);
   };

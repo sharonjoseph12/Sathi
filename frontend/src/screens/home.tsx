@@ -3,7 +3,7 @@ import { api, localSafety, type Med } from "../lib/api";
 import { t } from "../lib/i18n";
 import { speakSmart } from "../lib/voice";
 import { go, useApp } from "../lib/store";
-import { Avatar, Badge, Btn, Card, Confetti, Empty, Input, Ring, SectionLabel } from "../components/ui";
+import { Avatar, Badge, Btn, Card, Confetti, Empty, Ring, SectionLabel } from "../components/ui";
 import { Icon } from "../components/icons";
 import { useAdaptiveProfile, isElder, wantsReducedMotion, wantsVoicePrimary } from "../lib/useAdaptiveProfile";
 

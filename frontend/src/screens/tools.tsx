@@ -5,7 +5,7 @@ import { speakSmart, transcribeBlob } from "../lib/voice";
 import { useApp } from "../lib/store";
 import { Badge, Btn, Card, Empty, Input, Area, Page } from "../components/ui";
 import { listenOnce } from "../lib/speech";
-import { useAdaptiveProfile, getVariant, isElder } from "../lib/useAdaptiveProfile";
+import { useAdaptiveProfile, isElder } from "../lib/useAdaptiveProfile";
 
 /* ══════════════════════════════════════════════════════════════════
    Scan — Prescription photo → OCR → review → import

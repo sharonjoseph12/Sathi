@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, localSafety } from "../lib/api";
 import { useApp } from "../lib/store";
-import { Badge, Btn, Card, Empty, Input, Page } from "../components/ui";
+import { Badge, Btn, Card, Input, Page } from "../components/ui";
 import { useAdaptiveProfile, isElder } from "../lib/useAdaptiveProfile";
 import { speak } from "./home";
 
