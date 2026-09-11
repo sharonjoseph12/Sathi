@@ -1,11 +1,20 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import { api, tok, type Me } from "./api";
+import {
+  type AdaptiveProfileRaw,
+  loadAdaptiveProfileRaw,
+  saveAdaptiveProfileRaw,
+} from "./useAdaptiveProfile";
 
 type Ctx = {
   me: Me | null; pid: number; setPid: (n: number) => void;
   login: (email: string, pw: string) => Promise<string | null>;
   register: (b: object) => Promise<string | null>;
   logout: () => void; refresh: () => Promise<void>;
+  /** Raw adaptive profile fields — update via setAdaptiveProfile */
+  adaptiveRaw: AdaptiveProfileRaw;
+  /** Persist adaptive profile and trigger re-render across the app */
+  setAdaptiveProfile: (raw: AdaptiveProfileRaw) => void;
 };
 const C = createContext<Ctx>({} as Ctx);
 export const useApp = () => useContext(C);
@@ -14,6 +23,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
   const [pid, setPidState] = useState<number>(Number(localStorage.getItem("@sathi_pid") || 0));
   const setPid = (n: number) => { setPidState(n); localStorage.setItem("@sathi_pid", String(n)); };
+
+  // Adaptive profile raw state — loaded from localStorage on mount
+  const [adaptiveRaw, setAdaptiveRawState] = useState<AdaptiveProfileRaw>(loadAdaptiveProfileRaw);
+  const setAdaptiveProfile = useCallback((raw: AdaptiveProfileRaw) => {
+    saveAdaptiveProfileRaw(raw);
+    setAdaptiveRawState(raw);
+  }, []);
 
   const refresh = async () => {
     if (!tok.get()) { setMe(null); return; }
@@ -41,7 +57,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   const logout = () => { tok.clear(); setMe(null); location.hash = "#/login"; };
 
-  return <C.Provider value={{ me, pid, setPid, login, register, logout, refresh }}>{children}</C.Provider>;
+  return <C.Provider value={{ me, pid, setPid, login, register, logout, refresh, adaptiveRaw, setAdaptiveProfile }}>{children}</C.Provider>;
 }
 
 // Tiny hash router
