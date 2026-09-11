@@ -3,7 +3,8 @@ import { api, localSafety, type Event, type Med } from "../lib/api";
 import { t } from "../lib/i18n";
 import { speakSmart } from "../lib/voice";
 import { go, useApp } from "../lib/store";
-import { Badge, Btn, Card, Confetti, Empty, Input, Mascot, Page, Ring, Seg, Toggle } from "../components/ui";
+import { Avatar, Badge, Btn, Card, Confetti, Empty, Input, Page, Ring, SectionLabel, Seg, Toggle } from "../components/ui";
+import { Icon } from "../components/icons";
 
 // Shared voice listener: Web Speech API, else typed fallback
 export function listenOnce(cb: (text: string) => void, setListening: (b: boolean) => void) {
@@ -98,28 +99,35 @@ export function Home() {
   return (
     <div className="grid gap-4">
       <Confetti fire={burst} />
-      <header className="overflow-hidden rounded-b-[40px] bg-gradient-to-r from-[#4B26C8] via-[#6C47FF] to-[#8B5CF6] p-5 text-white">
-        <div className="flex items-center justify-between">
-          <div><h1 className="text-xl font-extrabold">{t(me?.language || "en", "hello")}, {me?.name?.split(" ")[0] || "friend"}</h1>
-            <p className="text-xs text-white/80">{st.taken_today} of {st.total} doses · 🔥 {st.streak}d streak · ✨ {st.xp} XP</p></div>
-          <div className="animate-float">
-            <Mascot mood={alert ? "concerned" : "happy"} />
+      <section className="rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgb(16_24_40/0.05)]">
+        <div className="flex items-center gap-3">
+          <Avatar name={me?.name || "Patient"} />
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-fg">Today's recovery</p>
+            <h1 className="truncate text-lg font-bold tracking-tight">{t(me?.language || "en", "hello")}, {me?.name?.split(" ")[0] || "friend"}</h1>
+          </div>
+          <div className="text-right text-xs text-muted-fg">
+            <p className="font-semibold text-ink">{st.taken_today}/{st.total} doses</p>
+            <p>{st.streak}-day streak</p>
           </div>
         </div>
-        <div className="mt-3 flex items-center gap-4 rounded-[18px] bg-white/10 p-3">
+        <div className="mt-3 flex items-center gap-4 rounded-xl bg-muted/60 p-3">
           <Ring pct={st.adherence} />
           <div className="text-sm">
-            <p className="font-bold">Today's recovery</p>
-            <p className="text-white/80">{st.next_followup ? `Next: ${st.next_followup}` : "No follow-up scheduled"}</p>
+            <p className="font-semibold">Adherence {st.adherence}%</p>
+            <p className="text-[13px] text-muted-fg">{st.next_followup ? `Next follow-up: ${st.next_followup}` : "No follow-up scheduled"}</p>
           </div>
         </div>
-      </header>
+      </section>
 
       {window.location.hash.includes("demo=1") && <DemoGuide />}
 
       {alert && (
-        <Card accent="#EF4444">
-          <div className="flex items-center justify-between"><p className="font-bold text-danger">⚠ Please seek medical attention</p><Badge level="ESCALATE" /></div>
+        <Card accent="#B42318">
+          <div className="flex items-center justify-between gap-2">
+            <p className="flex items-center gap-2 text-sm font-semibold text-danger"><Icon name="alert" size={18} /> Please seek medical attention</p>
+            <Badge level="ESCALATE" />
+          </div>
           <p className="mt-2 text-sm">{alert.text}</p>
           <div className="mt-2 flex gap-2"><Btn kind="danger" onClick={() => setAlert(null)}>I've received help</Btn><Btn kind="ghost" onClick={() => setWhy((w) => !w)}>Why?</Btn></div>
           {why && <p className="mt-2 rounded-xl bg-muted p-2 text-xs text-muted-fg">Rule: {alert.rule}. No diagnosis made.</p>}
@@ -127,25 +135,30 @@ export function Home() {
       )}
 
       <Card>
-        <h3 className="mb-2 font-bold">Medicines</h3>
-        {meds.length === 0 ? <p className="text-sm text-muted-fg">All clear 🎉</p> : meds.map((m) => (
-          <div key={m.id} className="mb-2 flex items-center justify-between rounded-2xl bg-muted p-3">
-            <div><p className="text-sm font-bold">{m.name}</p><p className="text-xs text-muted-fg">{m.time} · {m.dose}</p></div>
-            <Btn onClick={() => take(m)}>{t(me?.language || "en", "take")}</Btn>
+        <SectionLabel>Medicines</SectionLabel>
+        {meds.length === 0 ? <Empty title="All doses complete" text="No remaining medicines for this time window." /> : meds.map((m) => (
+          <div key={m.id} className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-secondary text-primary"><Icon name="pill" size={18} /></span>
+              <div className="min-w-0"><p className="truncate text-sm font-semibold">{m.name}</p><p className="text-xs text-muted-fg">{m.time} · {m.dose}</p></div>
+            </div>
+            <Btn onClick={() => take(m)}>Mark taken</Btn>
           </div>
         ))}
-        <button className="mt-1 text-xs font-bold text-primary" onClick={() => go("#/meds")}>Manage all →</button>
+        <button className="mt-1 inline-flex min-h-[44px] items-center gap-1 text-[13px] font-semibold text-primary" onClick={() => go("#/meds")}>Manage medicines <Icon name="arrow" size={14} /></button>
       </Card>
 
       <div className="grid place-items-center gap-2 py-2 text-center">
-        <button onClick={() => listenOnce(report, setListening)}
-          className={`grid h-20 w-20 place-items-center rounded-full bg-primary text-3xl text-white shadow-lg active:scale-95 ${listening ? "animate-mic bg-danger" : ""}`}>🎙</button>
+        <button aria-label={listening ? "Stop listening" : "Report by voice"} onClick={() => listenOnce(report, setListening)}
+          className={`grid h-16 w-16 place-items-center rounded-full text-white shadow-md transition active:scale-95 ${listening ? "bg-danger" : "bg-primary hover:brightness-105"}`}>
+          <Icon name="mic" size={26} />
+        </button>
         <p className="text-xs text-muted-fg">{listening ? t(me?.language || "en", "listening") : t(me?.language || "en", "talk")}</p>
         {followup && (
-          <Card accent="#7C3AED">
+          <Card accent="#4F46E5">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold">💬 Sathi asks: {followup}</p>
-              <button className="text-xs font-bold text-muted-fg" onClick={() => setFollowup("")}>✕</button>
+              <p className="text-sm font-medium">Sathi asks: {followup}</p>
+              <button aria-label="Dismiss" className="min-h-[44px] min-w-[44px] text-xs font-bold text-muted-fg" onClick={() => setFollowup("")}>✕</button>
             </div>
           </Card>
         )}

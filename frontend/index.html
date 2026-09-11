@@ -3,11 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="Sathi — voice-first post-hospital recovery companion." />
-    <meta name="theme-color" content="#7C3AED" />
+    <meta name="theme-color" content="#7C3AED" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d0b1e" media="(prefers-color-scheme: dark)" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Sathi — Recovery Companion</title>
+    <script>
+      try {
+        var t = localStorage.getItem("@sathi_theme");
+        if (t === "dark" || (!t && matchMedia("(prefers-color-scheme: dark)").matches))
+          document.documentElement.classList.add("dark");
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

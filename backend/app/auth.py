@@ -1,5 +1,6 @@
-"""Minimal auth: salted sha256 passwords + HS256 JWT. No extra native deps."""
+"""Auth: PBKDF2 passwords + HS256 JWT. No extra native deps."""
 import hashlib
+import hmac
 import os
 import secrets
 import time
@@ -10,20 +11,44 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 SECRET = os.getenv("JWT_SECRET", "sathi-dev-secret")
+if SECRET == "sathi-dev-secret":
+    import logging as _lg
+    _lg.getLogger("sathi").warning("JWT_SECRET not set — using insecure dev default. Set JWT_SECRET in production.")
 ALGO = "HS256"
-TTL = 30 * 24 * 3600  # 30 days
+TTL = int(os.getenv("JWT_TTL_SECONDS", str(7 * 24 * 3600)))  # 7 days default
 _bearer = HTTPBearer(auto_error=False)
+
+# Simple in-memory login throttle: {ip_or_email: [timestamps]}
+_attempts: dict[str, list[float]] = {}
+_MAX_ATTEMPTS = 8
+_WINDOW = 300.0
+
+
+def rate_limit_login(key: str) -> None:
+    now = time.time()
+    hits = [t for t in _attempts.get(key, []) if now - t < _WINDOW]
+    if len(hits) >= _MAX_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many login attempts. Try again in a few minutes.")
+    hits.append(now)
+    _attempts[key] = hits
 
 
 def hash_pw(pw: str) -> str:
-    salt = secrets.token_hex(8)
-    return f"{salt}${hashlib.sha256((salt + pw).encode()).hexdigest()}"
+    salt = secrets.token_hex(16)
+    dk = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), 210_000)
+    return f"pbkdf2$210000${salt}${dk.hex()}"
 
 
 def check_pw(pw: str, h: str) -> bool:
     try:
-        salt, digest = h.split("$", 1)
-        return hashlib.sha256((salt + pw).encode()).hexdigest() == digest
+        # Back-compat: legacy single-round sha256 "salt$digest"
+        if not h.startswith("pbkdf2$"):
+            salt, digest = h.split("$", 1)
+            cand = hashlib.sha256((salt + pw).encode()).hexdigest()
+            return hmac.compare_digest(cand, digest)
+        _, iters, salt, digest = h.split("$", 3)
+        cand = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), int(iters)).hex()
+        return hmac.compare_digest(cand, digest)
     except Exception:
         return False
 

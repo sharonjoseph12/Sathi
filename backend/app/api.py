@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app import models, schemas
-from app.auth import check_pw, current_user, get_db, hash_pw, need_roles, token_for
+from app.auth import check_pw, current_user, get_db, hash_pw, need_roles, rate_limit_login, token_for
 from app.database import engine
 from app import safety as S
 from app.ai_engine import companion_reply
@@ -98,6 +98,7 @@ def register(body: schemas.RegisterIn, db: Session = Depends(get_db)):
 
 @router.post("/auth/login")
 def login(body: schemas.LoginIn, db: Session = Depends(get_db)):
+    rate_limit_login(body.email.strip().lower())
     u = db.query(models.User).filter(models.User.email == body.email).first()
     if not u or not check_pw(body.password, u.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")

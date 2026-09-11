@@ -1,38 +1,39 @@
 import { useEffect, useState, type ReactNode } from "react";
 
-// Minimal kit from Sathi pixel specs: radius card 22 / pill 50, purple shadows.
-export const Card = ({ children, accent }: { children: ReactNode; accent?: string }) => (
-  <div className="rounded-[22px] bg-card p-4 shadow-[0_2px_8px_rgb(124_58_237/0.07)]"
-    style={accent ? { borderLeft: `5px solid ${accent}` } : undefined}>{children}</div>
+// Professional clinical design kit: 16px radius, 1px borders, quiet shadows.
+export const Card = ({ children, accent, className = "" }: { children: ReactNode; accent?: string; className?: string }) => (
+  <div className={`rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgb(16_24_40/0.05)] ${className}`}
+    style={accent ? { borderLeft: `3px solid ${accent}` } : undefined}>{children}</div>
 );
 
-export const Btn = ({ children, onClick, kind = "primary", className = "" }: {
-  children: ReactNode; onClick?: () => void; kind?: "primary" | "ghost" | "danger" | "success"; className?: string;
+export const Btn = ({ children, onClick, kind = "primary", className = "", label, type, disabled }: {
+  children: ReactNode; onClick?: () => void; kind?: "primary" | "ghost" | "danger" | "success"; className?: string; label?: string; type?: "button" | "submit"; disabled?: boolean;
 }) => {
   const k = {
-    primary: "bg-primary text-white shadow-[0_6px_16px_rgb(108_71_255/0.35)]",
+    primary: "bg-primary text-white shadow-[0_1px_2px_rgb(16_24_40/0.12)] hover:brightness-105",
     success: "bg-success text-white", danger: "bg-danger text-white",
-    ghost: "bg-secondary text-primary",
+    ghost: "border border-border bg-card text-ink hover:bg-muted",
   }[kind];
-  return <button onClick={onClick} className={`rounded-full px-5 py-2.5 text-sm font-bold active:scale-95 transition ${k} ${className}`}>{children}</button>;
+  return <button type={type || "button"} aria-label={label} disabled={disabled} onClick={onClick} className={`min-h-[44px] rounded-xl px-5 py-2.5 text-sm font-semibold active:scale-[0.98] transition disabled:opacity-50 ${k} ${className}`}>{children}</button>;
 };
 
 export const Input = (p: React.InputHTMLAttributes<HTMLInputElement>) => (
-  <input {...p} className={`w-full rounded-2xl border border-border bg-muted px-4 py-3 text-sm outline-none focus:border-primary ${p.className || ""}`} />
+  <input {...p} className={`min-h-[44px] w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink placeholder:text-muted-fg outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 ${p.className || ""}`} />
 );
 
 export const Area = (p: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
-  <textarea {...p} className={`w-full rounded-2xl border border-border bg-muted px-4 py-3 text-sm outline-none focus:border-primary ${p.className || ""}`} />
+  <textarea {...p} className={`w-full rounded-xl border border-border bg-card px-4 py-3 text-sm text-ink placeholder:text-muted-fg outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 ${p.className || ""}`} />
 );
 
 export const Badge = ({ level }: { level: string }) => {
   const m: Record<string, string> = {
-    NORMAL: "bg-secondary text-primary", MONITOR: "bg-amber-100 text-amber-800",
-    ESCALATE: "bg-red-100 text-red-800", high: "bg-red-100 text-red-800",
-    medium: "bg-amber-100 text-amber-800", low: "bg-emerald-100 text-emerald-800",
-    taken: "bg-emerald-100 text-emerald-800", active: "bg-secondary text-primary",
+    NORMAL: "bg-secondary text-primary", MONITOR: "bg-amber-100 text-amber-900",
+    ESCALATE: "bg-red-100 text-red-900", high: "bg-red-100 text-red-900",
+    medium: "bg-amber-100 text-amber-900", low: "bg-emerald-100 text-emerald-900",
+    taken: "bg-emerald-100 text-emerald-900", active: "bg-secondary text-primary",
   };
-  return <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${m[level] ?? "bg-muted text-muted-fg"}`}>{level}</span>;
+  const icon = level === "ESCALATE" || level === "high" ? "⚠ " : level === "MONITOR" ? "● " : "";
+  return <span role="status" className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${m[level] ?? "bg-muted text-muted-fg"}`}>{icon}{level}</span>;
 };
 
 export const Ring = ({ pct, size = 84 }: { pct: number; size?: number }) => {
@@ -55,14 +56,27 @@ export const Ring = ({ pct, size = 84 }: { pct: number; size?: number }) => {
 };
 
 export const Mascot = ({ mood = "happy" }: { mood?: "happy" | "concerned" | "celebrate" }) => (
-  <div className="grid h-16 w-16 place-items-center rounded-full bg-white/20 text-3xl">
-    {mood === "concerned" ? "🧸‍⚕️" : mood === "celebrate" ? "🎉" : "🧸"}
+  <div className={`grid h-12 w-12 place-items-center rounded-full text-sm font-bold ${mood === "concerned" ? "bg-red-100 text-red-800" : "bg-secondary text-primary"}`}>
+    S
   </div>
 );
 
-export const Page = ({ title, sub, right }: { title: string; sub?: string; right?: ReactNode }) => (
-  <div className="mb-3 flex items-center justify-between">
-    <div><h2 className="text-lg font-extrabold">{title}</h2>{sub && <p className="text-xs text-muted-fg">{sub}</p>}</div>
+export const Avatar = ({ name }: { name: string }) => {
+  const initials = name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "S";
+  return <div aria-hidden="true" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary text-sm font-bold text-white">{initials}</div>;
+};
+
+export const SectionLabel = ({ children }: { children: ReactNode }) => (
+  <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.08em] text-muted-fg">{children}</p>
+);
+
+export const Page = ({ title, sub, right, eyebrow }: { title: string; sub?: string; right?: ReactNode; eyebrow?: string }) => (
+  <div className="mb-4 flex items-start justify-between gap-3">
+    <div>
+      {eyebrow && <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-primary">{eyebrow}</p>}
+      <h2 className="text-xl font-bold tracking-tight">{title}</h2>
+      {sub && <p className="mt-0.5 text-[13px] text-muted-fg">{sub}</p>}
+    </div>
     {right}
   </div>
 );
@@ -76,8 +90,11 @@ export const Seg = <T extends string>({ opts, val, set }: { opts: T[]; val: T; s
   </div>
 );
 
-export const Empty = ({ text }: { text: string }) => (
-  <p className="rounded-2xl bg-muted p-4 text-center text-sm text-muted-fg">{text}</p>
+export const Empty = ({ text, title }: { text: string; title?: string }) => (
+  <div className="rounded-2xl border border-dashed border-border bg-muted/50 p-6 text-center">
+    {title && <p className="text-sm font-semibold">{title}</p>}
+    <p className="mt-1 text-[13px] text-muted-fg">{text}</p>
+  </div>
 );
 
 // Jargon toggle (VAni MedicineCard switch): plain ↔ original wording
@@ -98,7 +115,7 @@ export const OfflineBanner = () => {
     return () => { window.removeEventListener("online", f); window.removeEventListener("offline", f); };
   }, []);
   if (online) return null;
-  return <div className="sticky top-0 z-50 rounded-b-2xl bg-warning px-4 py-2 text-center text-xs font-bold text-black">📴 Offline — schedules cached, doses will sync</div>;
+  return <div role="alert" className="sticky top-0 z-50 rounded-b-2xl bg-warning px-4 py-2 text-center text-xs font-bold text-black">📴 Offline — schedules cached, doses will sync</div>;
 };
 
 // Confetti burst (VAni SuccessBurst, CSS-only)

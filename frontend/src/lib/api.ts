@@ -5,7 +5,7 @@ export type Safety = "NORMAL" | "MONITOR" | "ESCALATE";
 export type PatientRef = { id: number; name: string; rel?: string };
 export type Me = { id: number; name: string; email: string; role: string; language: string; theme: string; anchor_times: string; patients: PatientRef[] };
 
-const BASE = (import.meta.env.VITE_API_URL as string) || "http://localhost:8000/api";
+const BASE = ((import.meta.env.VITE_API_URL as string) || "http://localhost:8000/api").replace(/\/$/, "");
 const TKEY = "@sathi_token";
 const QKEY = "@sathi_offline_queue";
 
@@ -44,17 +44,29 @@ async function cached<T>(pid: number, key: string, fn: () => Promise<T>): Promis
   }
 }
 
-async function req<T>(path: string, init?: RequestInit, offlineRetry?: string): Promise<T> {
+async function req<T>(path: string, init?: RequestInit, offlineRetry?: string, timeoutMs = 15000): Promise<T> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
   let r: Response;
   try {
-    r = await fetch(`${BASE}${path}`, { headers: h(), ...init });
-  } catch {
+    r = await fetch(`${BASE}${path}`, { headers: h(), signal: ctrl.signal, ...init });
+  } catch (e) {
     if (offlineRetry) queue.push(offlineRetry);
-    throw new Error("offline");
+    throw new Error(e instanceof DOMException && e.name === "AbortError" ? "request timed out — try again" : "offline");
+  } finally {
+    clearTimeout(t);
+  }
+  if (r.status === 401) {
+    tok.clear();
+    if (!location.hash.startsWith("#/login")) location.hash = "#/login";
+    throw new Error("session expired — please log in again");
   }
   if (!r.ok) {
     let d = "";
-    try { d = (await r.json()).detail || ""; } catch { /* ignore */ }
+    try {
+      const j = await r.json();
+      d = (j as { detail?: string }).detail || "";
+    } catch { /* ignore */ }
     throw new Error(d || `request failed (${r.status})`);
   }
   return r.json() as Promise<T>;
