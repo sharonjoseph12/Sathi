@@ -157,3 +157,22 @@ export const wantsLargeText = (p: AdaptiveProfile) => p.prefersLargeText;
 export const wantsHighContrast = (p: AdaptiveProfile) => p.prefersHighContrast;
 export const wantsVoicePrimary = (p: AdaptiveProfile) => p.prefersVoice;
 export const wantsReducedMotion = (p: AdaptiveProfile) => p.prefersReducedMotion;
+
+// ── Helper functions for component variant selection (used by Dev 4 screens) ──
+
+export function hasFlag(p: AdaptiveProfile, flag: AccessibilityFlag): boolean {
+  return p.accessibilityFlags.includes(flag);
+}
+
+/** Returns "elder" | "standard" | "caregiver" for component variant selection */
+export function getVariant(p: AdaptiveProfile): "elder" | "standard" | "caregiver" {
+  if (p.isElder || p.isLowLiteracy) return "elder";
+  if (p.role === "caregiver") return "caregiver";
+  return "standard";
+}
+
+/** Check reduced-motion preference (CSS + profile flag) */
+export function prefersReducedMotion(p: AdaptiveProfile): boolean {
+  return p.prefersReducedMotion;
+}
+
