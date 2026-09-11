@@ -26,3 +26,17 @@ export function listenOnce(cb: (text: string) => void, setListening: (b: boolean
   rec.onend = () => setListening(false);
   rec.start();
 }
+
+/**
+ * Browser TTS one-shot: speaks `text` using Web Speech API synthesis.
+ */
+export function speak(text: string, lang = "en-IN") {
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = lang;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  } catch {
+    /* voice optional */
+  }
+}

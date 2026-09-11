@@ -3,7 +3,7 @@ import { api, localSafety } from "../lib/api";
 import { useApp } from "../lib/store";
 import { Badge, Btn, Card, Input, Page } from "../components/ui";
 import { useAdaptiveProfile, isElder } from "../lib/useAdaptiveProfile";
-import { speak } from "./home";
+import { speak } from "../lib/speech";
 
 // ── Elder severity selector: 3 big buttons (Mild / Moderate / Severe) ──
 function ElderSeverity({ value, onChange }: { value: number; onChange: (n: number) => void }) {
