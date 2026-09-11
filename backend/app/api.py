@@ -2,9 +2,12 @@
 Port of VAni core minus SOS/blood-network. Works offline-friendly with MOCK AI."""
 import asyncio
 import json
+import logging
 import random
 import string
 from datetime import datetime, timezone
+
+logger = logging.getLogger("sathi.api")
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
